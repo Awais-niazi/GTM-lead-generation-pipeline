@@ -1,0 +1,7 @@
+name,phone,email,city,study_level,subject,highest_qualification,grade_percent,cgpa,passing_year,english_test,english_score,english_medium,budget_pkr_lakh,funding_source,preferred_intake,location_pref,has_passport,previous_uk_refusal,bring_dependants,other_countries,consent
+EXAMPLE Ayesha Khan,0300-1234567,ayesha.k@gmail.com,Lahore,pg_taught,Data Science,bachelors_16,,3.4,2025,ielts_ukvi,7,yes,170,self_family,Jan 2027,outside,yes,no,no,,yes
+EXAMPLE Bilal Ahmed,0333 7654321,bilal@yahoo.com,Faisalabad,ug,Computer Science,fsc_hssc,81,,2026,planned,,no,75,self_family,Sep 2027,outside,yes,no,no,Canada,yes
+EXAMPLE Hamza Riaz,03451112233,,Karachi,pg_taught,MBA Finance,bachelors_14,58,,2016,none,,yes,55,loan,Jan 2027,london,no,no,yes,"Canada,Australia",yes
+EXAMPLE Sana Malik,+92 321 9988776,sana@mailinator.com,isb,phd,Molecular Biology,mphil,,3.7,2024,ielts,6.5,yes,160,sponsor,Sep 2027,outside,yes,no,yes,,yes
+EXAMPLE Usman Tariq,0312-4455667,usman.t@gmail.com,Multan,mba,Business,bachelors_16,,2.6,2019,pte,6,no,140,self_family,May 2027,outside,yes,yes,no,,yes
+EXAMPLE Zainab,12345,,Peshawar,ug,,matric,,,2025,none,,no,20,scholarship_only,not sure,any,no,no,no,"USA,Germany",no

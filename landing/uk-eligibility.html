@@ -1,0 +1,527 @@
+<title>UK Study Pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: two columns — question flow on the left, a live boarding pass (LHE → LON) on the right that fills in as the student answers; stacks on phones with the pass on top. */
+:root {
+  --bg: #eef2f4;
+  --surface: #ffffff;
+  --ink: #0f1d33;
+  --muted: #56657a;
+  --line: #d3dbe3;
+  --accent: #0b7a5c;          /* Pakistan-green, used for progress + primary action */
+  --accent-ink: #ffffff;
+  --accent-soft: #e2f2ec;
+  --pass: #10213d;            /* boarding pass body */
+  --pass-ink: #f2f5f8;
+  --pass-muted: #9fb0c6;
+  --good: #0b7a5c; --warn: #b26a00; --bad: #b3261e;
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b121d; --surface: #131d2b; --ink: #e6edf5; --muted: #95a4b8; --line: #263447;
+  --accent: #3cc49b; --accent-ink: #062018; --accent-soft: #123228;
+  --pass: #1b2c48; --pass-ink: #eef3f8; --pass-muted: #93a6c0;
+  --good: #3cc49b; --warn: #f0a83a; --bad: #f2756b; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0b121d; --surface: #131d2b; --ink: #e6edf5; --muted: #95a4b8; --line: #263447;
+  --accent: #3cc49b; --accent-ink: #062018; --accent-soft: #123228;
+  --pass: #1b2c48; --pass-ink: #eef3f8; --pass-muted: #93a6c0;
+  --good: #3cc49b; --warn: #f0a83a; --bad: #f2756b; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--f-body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 32px 20px 56px; }
+header.top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
+.brand { font: 700 15px/1 var(--f-display); font-stretch: 110%; letter-spacing: .02em; text-transform: uppercase; }
+.top small { color: var(--muted); font-family: var(--f-mono); font-size: 12px; }
+h1 { font: 800 clamp(30px, 5vw, 50px)/1.02 var(--f-display); font-stretch: 82%; letter-spacing: -.01em; margin: 0 0 12px; text-wrap: balance; max-width: 15ch; }
+.lede { color: var(--muted); max-width: 52ch; margin: 0 0 28px; font-size: 18px; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 32px; align-items: start; }
+@media (max-width: 880px) { .grid { grid-template-columns: minmax(0, 1fr); } .pass-col { order: -1; } }
+
+/* ---- form ---- */
+form { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 24px; min-width: 0; }
+.progress { display: flex; gap: 6px; margin-bottom: 20px; }
+.progress span { flex: 1; height: 4px; border-radius: 2px; background: var(--line); transition: background .25s; }
+.progress span.on { background: var(--accent); }
+.step-label { font: 600 12px/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 18px; min-width: 0; }
+legend { font: 700 24px/1.15 var(--f-display); font-stretch: 90%; margin-bottom: 18px; padding: 0; text-wrap: balance; }
+label.f { display: grid; gap: 6px; font-weight: 600; font-size: 15px; }
+.hint { font-weight: 400; color: var(--muted); font-size: 13.5px; }
+input[type=text], input[type=tel], input[type=email], input[type=number], select {
+  font: inherit; font-weight: 400; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 11px 12px; width: 100%; min-width: 0; }
+input:focus-visible, select:focus-visible, button:focus-visible, .chip:focus-within, .opt:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 520px) { .row2 { grid-template-columns: 1fr; } }
+
+.opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.opt { position: relative; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; background: var(--bg); transition: border-color .15s, background .15s; }
+.opt input { position: absolute; opacity: 0; }
+.opt b { display: block; font-weight: 600; }
+.opt small { color: var(--muted); font-size: 13px; }
+.opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer; font-size: 14.5px; background: var(--bg); }
+.chip input { position: absolute; opacity: 0; width: 0; }
+.chip:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+
+.budget-out { font: 600 28px/1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.budget-out em { font-style: normal; font-size: 14px; color: var(--muted); margin-left: 6px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.scale { display: flex; justify-content: space-between; font: 12px var(--f-mono); color: var(--muted); }
+
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; }
+.check input { margin-top: 4px; accent-color: var(--accent); width: 18px; height: 18px; flex: none; }
+.hp { position: absolute; left: -9999px; }
+
+.nav { display: flex; justify-content: space-between; gap: 12px; margin-top: 24px; }
+button { font: 600 16px/1 var(--f-body); border-radius: 8px; padding: 13px 20px; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--ink); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); margin-left: auto; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.err { color: var(--bad); font-size: 14px; min-height: 20px; margin-top: 10px; }
+.demo { font: 12px var(--f-mono); color: var(--muted); margin-top: 14px; }
+
+/* ---- boarding pass ---- */
+.pass-col { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); min-width: 0; }
+.pass { background: var(--pass); color: var(--pass-ink); border-radius: 16px; overflow: hidden; font-family: var(--f-mono); }
+.pass .head { display: flex; justify-content: space-between; padding: 16px 20px 0; font-size: 11px; letter-spacing: .12em; color: var(--pass-muted); text-transform: uppercase; }
+.route { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px 4px; }
+.code { font: 800 46px/1 var(--f-display); font-stretch: 78%; letter-spacing: .02em; }
+.route .plane { flex: 1; margin: 0 14px; border-top: 2px dashed var(--pass-muted); position: relative; height: 0; }
+.route .plane::after { content: ""; position: absolute; right: -2px; top: -7px; border: 6px solid transparent; border-left: 10px solid var(--pass-ink); }
+.cities { display: flex; justify-content: space-between; padding: 0 20px 14px; font-size: 12px; color: var(--pass-muted); }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; padding: 14px 20px 18px; border-top: 1px solid rgba(255,255,255,.12); }
+.fields div { min-width: 0; }
+.fields dt { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--pass-muted); }
+.fields dd { margin: 3px 0 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.fields .wide { grid-column: 1 / -1; }
+.tear { position: relative; border-top: 2px dashed rgba(255,255,255,.22); margin: 0 14px; }
+.tear::before, .tear::after { content: ""; position: absolute; top: -12px; width: 22px; height: 22px; border-radius: 50%; background: var(--bg); }
+.tear::before { left: -26px; } .tear::after { right: -26px; }
+.stub { padding: 16px 20px 18px; display: grid; gap: 10px; }
+.barcode { height: 40px; background: repeating-linear-gradient(90deg, var(--pass-ink) 0 2px, transparent 2px 4px, var(--pass-ink) 4px 5px, transparent 5px 8px, var(--pass-ink) 8px 11px, transparent 11px 13px); opacity: .85; border-radius: 2px; }
+.stub small { color: var(--pass-muted); font-size: 11px; letter-spacing: .08em; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.pill.good { background: var(--good); color: var(--pass); }
+.pill.warn { background: var(--warn); color: var(--pass); }
+.pill.bad { background: var(--bad); color: var(--pass); }
+.facts { font: 12px/1.5 var(--f-mono); color: var(--muted); margin-top: 14px; }
+
+/* ---- result ---- */
+.result h2 { font: 800 30px/1.05 var(--f-display); font-stretch: 85%; margin: 0 0 10px; text-wrap: balance; }
+.result p { color: var(--muted); margin: 0 0 18px; max-width: 58ch; }
+.verdicts { display: grid; gap: 10px; margin-bottom: 20px; }
+.verdict { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.verdict i { border-radius: 3px; }
+.verdict i.good { background: var(--good); } .verdict i.warn { background: var(--warn); } .verdict i.bad { background: var(--bad); }
+.verdict b { display: block; }
+.verdict span { color: var(--muted); font-size: 14.5px; }
+.result ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand" id="agency">Your Consultancy</div>
+    <small>UK intakes: Jan · May · Sep</small>
+  </header>
+
+  <h1>Can you study in the UK in 2027?</h1>
+  <p class="lede">Answer six short questions. You'll see your realistic first-year cost in PKR, the intake you can make, and what's missing from your file.</p>
+
+  <div class="grid">
+    <form id="quiz" novalidate>
+      <div class="progress" id="progress" aria-hidden="true"></div>
+
+      <!-- 1 -->
+      <fieldset data-step="1">
+        <div class="step-label">Step 1 of 6</div>
+        <legend>What do you want to study?</legend>
+        <div class="opts" role="radiogroup" aria-label="Study level">
+          <label class="opt"><input type="radio" name="study_level" value="foundation" id="lv-f"><b>Foundation</b><small>Pathway year before a degree</small></label>
+          <label class="opt"><input type="radio" name="study_level" value="ug" id="lv-ug"><b>Bachelor's</b><small>BSc, BA, LLB — 3 years</small></label>
+          <label class="opt"><input type="radio" name="study_level" value="pg_taught" id="lv-pg"><b>Master's</b><small>MSc, MA, LLM — 1 year</small></label>
+          <label class="opt"><input type="radio" name="study_level" value="mba" id="lv-mba"><b>MBA</b><small>Usually needs work experience</small></label>
+          <label class="opt"><input type="radio" name="study_level" value="phd" id="lv-phd"><b>PhD</b><small>Research, 3–4 years</small></label>
+        </div>
+        <label class="f">Subject <span class="hint">e.g. Data Science, Nursing, Accounting &amp; Finance</span>
+          <input type="text" name="subject" id="subject" autocomplete="off"></label>
+      </fieldset>
+
+      <!-- 2 -->
+      <fieldset data-step="2" hidden>
+        <div class="step-label">Step 2 of 6</div>
+        <legend>Your education so far</legend>
+        <label class="f">Highest qualification completed
+          <select name="highest_qualification" id="qual">
+            <option value="">Choose one</option>
+            <option value="matric">Matric / SSC</option>
+            <option value="o_levels">O Levels</option>
+            <option value="fsc_hssc">FSc / ICS / I.Com / HSSC</option>
+            <option value="a_levels">A Levels</option>
+            <option value="dae">DAE (Diploma)</option>
+            <option value="bachelors_14">BA / BSc (2-year, 14 years)</option>
+            <option value="bachelors_16">BS / BSc Hons / BBA (4-year, 16 years)</option>
+            <option value="masters">Master's (MA, MSc, MBA)</option>
+            <option value="mphil">MPhil / MS</option>
+          </select></label>
+        <div class="row2">
+          <label class="f">Percentage or CGPA <span class="hint">e.g. 72 or 3.2</span>
+            <input type="number" name="grade" id="grade" step="0.01" min="0" max="100" inputmode="decimal"></label>
+          <label class="f">Passing year
+            <input type="number" name="passing_year" id="pyear" min="1990" max="2027" inputmode="numeric" placeholder="2025"></label>
+        </div>
+      </fieldset>
+
+      <!-- 3 -->
+      <fieldset data-step="3" hidden>
+        <div class="step-label">Step 3 of 6</div>
+        <legend>English test</legend>
+        <label class="f">Have you taken an English test?
+          <select name="english_test" id="etest">
+            <option value="">Choose one</option>
+            <option value="ielts_ukvi">IELTS UKVI</option>
+            <option value="ielts">IELTS Academic</option>
+            <option value="pte">PTE Academic</option>
+            <option value="toefl">TOEFL</option>
+            <option value="duolingo">Duolingo</option>
+            <option value="planned">Not yet, planning to</option>
+            <option value="none">No, and not planning</option>
+          </select></label>
+        <label class="f" id="score-wrap" hidden>Overall score <span class="hint">IELTS band, or the IELTS equivalent</span>
+          <input type="number" name="english_score" id="escore" step="0.5" min="0" max="9" inputmode="decimal"></label>
+        <label class="check"><input type="checkbox" name="english_medium" id="emed"> My previous degree or HSSC was taught in English</label>
+      </fieldset>
+
+      <!-- 4 -->
+      <fieldset data-step="4" hidden>
+        <div class="step-label">Step 4 of 6</div>
+        <legend>Budget for the first year</legend>
+        <label class="f">Total your family can arrange for year one <span class="hint">Tuition, living costs, visa and flights together</span>
+          <div class="budget-out"><span id="bval">60</span><em>lakh PKR</em></div>
+          <input type="range" name="budget_pkr_lakh" id="budget" min="10" max="250" step="5" value="60" aria-describedby="bval">
+          <div class="scale"><span>10 lakh</span><span>1 crore</span><span>2.5 crore</span></div></label>
+        <label class="f">How will you fund it?
+          <select name="funding_source" id="fund">
+            <option value="">Choose one</option>
+            <option value="self_family">Own / family savings</option>
+            <option value="loan">Bank loan</option>
+            <option value="sponsor">Sponsor or employer</option>
+            <option value="scholarship_only">Only if I get a full scholarship</option>
+            <option value="unsure">Not sure yet</option>
+          </select></label>
+        <div class="f" style="font-weight:600">Where in the UK?
+          <div class="chips" role="radiogroup" aria-label="Location">
+            <label class="chip"><input type="radio" name="location_pref" value="outside" id="loc-o">Outside London</label>
+            <label class="chip"><input type="radio" name="location_pref" value="london" id="loc-l">London</label>
+            <label class="chip"><input type="radio" name="location_pref" value="any" id="loc-a" checked>Either</label>
+          </div></div>
+      </fieldset>
+
+      <!-- 5 -->
+      <fieldset data-step="5" hidden>
+        <div class="step-label">Step 5 of 6</div>
+        <legend>Your plans</legend>
+        <label class="f">When do you want to start?
+          <select name="preferred_intake" id="intake">
+            <option value="">Choose one</option>
+            <option>Jan 2027</option><option>May 2027</option><option>Sep 2027</option>
+            <option>Jan 2028</option><option>Sep 2028</option><option value="not sure">Not sure</option>
+          </select></label>
+        <div class="row2">
+          <div class="f" style="font-weight:600">Do you have a valid passport?
+            <div class="chips"><label class="chip"><input type="radio" name="has_passport" value="yes" id="pp-y">Yes</label><label class="chip"><input type="radio" name="has_passport" value="no" id="pp-n">No</label></div></div>
+          <div class="f" style="font-weight:600">Bring spouse or children?
+            <div class="chips"><label class="chip"><input type="radio" name="bring_dependants" value="yes" id="dp-y">Yes</label><label class="chip"><input type="radio" name="bring_dependants" value="no" id="dp-n">No</label></div></div>
+        </div>
+        <div class="f" style="font-weight:600">Any other countries you're considering?
+          <div class="chips">
+            <label class="chip"><input type="checkbox" name="other_countries" value="Canada" id="oc-ca">Canada</label>
+            <label class="chip"><input type="checkbox" name="other_countries" value="Australia" id="oc-au">Australia</label>
+            <label class="chip"><input type="checkbox" name="other_countries" value="USA" id="oc-us">USA</label>
+            <label class="chip"><input type="checkbox" name="other_countries" value="Ireland" id="oc-ie">Ireland</label>
+            <label class="chip"><input type="checkbox" name="other_countries" value="Germany" id="oc-de">Germany</label>
+          </div></div>
+        <label class="check"><input type="checkbox" name="previous_uk_refusal" id="refusal"> I've had a UK visa refused before</label>
+      </fieldset>
+
+      <!-- 6 -->
+      <fieldset data-step="6" hidden>
+        <div class="step-label">Step 6 of 6</div>
+        <legend>Where should we send your plan?</legend>
+        <label class="f">Full name <input type="text" name="name" id="name" autocomplete="name"></label>
+        <div class="row2">
+          <label class="f">WhatsApp number <span class="hint">03XX XXXXXXX</span>
+            <input type="tel" name="phone" id="phone" autocomplete="tel" inputmode="tel"></label>
+          <label class="f">City <input type="text" name="city" id="city" list="cities" autocomplete="address-level2"></label>
+        </div>
+        <datalist id="cities"><option>Lahore</option><option>Karachi</option><option>Islamabad</option><option>Rawalpindi</option><option>Faisalabad</option><option>Multan</option><option>Peshawar</option><option>Gujranwala</option><option>Sialkot</option><option>Quetta</option><option>Hyderabad</option></datalist>
+        <label class="f">Email <span class="hint">Optional</span><input type="email" name="email" id="email" autocomplete="email"></label>
+        <input class="hp" type="text" name="website" id="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <label class="check"><input type="checkbox" name="consent" id="consent"> <span id="consent-text">I agree that a counselor may contact me on WhatsApp, phone and email about studying in the UK. I can opt out anytime by replying STOP.</span></label>
+      </fieldset>
+
+      <!-- result -->
+      <section class="result" id="result" hidden aria-live="polite"></section>
+
+      <div class="nav" id="nav">
+        <button type="button" id="back" hidden>Back</button>
+        <button type="button" class="primary" id="next">Next</button>
+      </div>
+      <div class="err" id="err" role="alert"></div>
+      <div class="demo" id="demo" hidden>Preview mode: answers stay in this page. Set PIPELINE_URL to send them to your lead sheet.</div>
+    </form>
+
+    <aside class="pass-col" aria-label="Your UK study pass">
+      <div class="pass">
+        <div class="head"><span>UK Study Pass</span><span id="p-no">No. ——</span></div>
+        <div class="route"><span class="code" id="p-from">PAK</span><span class="plane"></span><span class="code" id="p-to">UK</span></div>
+        <div class="cities"><span id="p-fromcity">Your city</span><span id="p-tocity">United Kingdom</span></div>
+        <dl class="fields">
+          <div class="wide"><dt>Student</dt><dd id="p-name">—</dd></div>
+          <div><dt>Programme</dt><dd id="p-level">—</dd></div>
+          <div><dt>Intake</dt><dd id="p-intake">—</dd></div>
+          <div><dt>Year-one cost</dt><dd id="p-cost">—</dd></div>
+          <div><dt>Your budget</dt><dd id="p-budget">—</dd></div>
+          <div><dt>English</dt><dd id="p-eng">—</dd></div>
+          <div><dt>Academic entry</dt><dd id="p-route">—</dd></div>
+        </dl>
+        <div class="tear"></div>
+        <div class="stub"><div class="barcode"></div><small id="p-foot">FILLS IN AS YOU ANSWER</small></div>
+      </div>
+      <div class="facts">Costs use UK Student visa rules: £558 visa fee, £776/yr health surcharge, living funds of £1,203/month outside London or £1,570 in London for applications from 30 Nov 2026.</div>
+    </aside>
+  </div>
+</div>
+
+<script>
+/* ===== Settings — edit these two lines when you host the page ===== */
+const PIPELINE_URL = "";          // e.g. "https://leads.youragency.pk/webhook/quiz"
+const QUIZ_KEY = "";              // must match QUIZ_SHARED_KEY on the server
+const AGENCY = "Your Consultancy";
+const GBP_TO_PKR = 375;
+/* ================================================================== */
+
+document.getElementById("agency").textContent = AGENCY;
+const TUITION = { foundation: 9000, ug: 14000, pg_taught: 15000, mba: 18000, phd: 17000 };
+const YEARS = { foundation: 1, ug: 3, pg_taught: 1, mba: 1, phd: 3 };
+const IELTS = { foundation: 4.5, ug: 6.0, pg_taught: 6.5, mba: 6.5, phd: 6.5 };
+const INTAKES = [["Jan 2027","2027-01-15"],["May 2027","2027-05-10"],["Sep 2027","2027-09-20"],["Jan 2028","2028-01-15"],["Sep 2028","2028-09-20"]]
+  .map(([l, d]) => [l, new Date(d + "T00:00:00")]);
+const CODES = { lahore:"LHE", karachi:"KHI", islamabad:"ISB", rawalpindi:"ISB", peshawar:"PEW", multan:"MUX", faisalabad:"LYP", quetta:"UET", sialkot:"SKT", sukkur:"SKZ", gujranwala:"LHE", hyderabad:"KHI" };
+const LEVEL_NAME = { foundation:"Foundation", ug:"Bachelor's", pg_taught:"Master's", mba:"MBA", phd:"PhD" };
+const ROUTE_NAME = { direct:"Direct entry", check:"Depends on university", foundation:"Foundation first", pre_masters:"Pre-master's first", unknown:"—" };
+const ENG_NAME = { meets:"Meets requirement", below:"Below requirement", waiver_possible:"Waiver possible", needs_test:"Test needed", unknown:"—" };
+
+const form = document.getElementById("quiz");
+const steps = [...form.querySelectorAll("fieldset[data-step]")];
+let cur = 0;
+const $ = id => document.getElementById(id);
+steps.forEach(() => $("progress").appendChild(document.createElement("span")));
+
+// Prefill from links like ?src=whatsapp&phone=923001234567 (works when self-hosted)
+let params; try { params = new URLSearchParams(location.search); } catch { params = new URLSearchParams(); }
+if (params.get("phone")) $("phone").value = "+" + params.get("phone").replace(/\D/g, "");
+if (!PIPELINE_URL) $("demo").hidden = false;
+
+function data() {
+  const f = new FormData(form), d = {};
+  const v = k => (f.get(k) || "").toString().trim();
+  d.study_level = v("study_level") || null;
+  d.subject = v("subject");
+  d.highest_qualification = v("highest_qualification") || null;
+  const g = parseFloat(v("grade"));
+  if (!isNaN(g)) { if (g <= 4) d.cgpa = g; else d.grade_percent = g; }
+  const py = parseInt(v("passing_year")); if (!isNaN(py)) d.passing_year = py;
+  d.english_test = v("english_test") || null;
+  const es = parseFloat(v("english_score")); if (!isNaN(es)) d.english_score = es;
+  d.english_medium = !!f.get("english_medium");
+  d.budget_pkr_lakh = parseFloat(v("budget_pkr_lakh"));
+  d.funding_source = v("funding_source") || null;
+  d.location_pref = v("location_pref") || "any";
+  d.preferred_intake = v("preferred_intake");
+  d.has_passport = v("has_passport") ? v("has_passport") === "yes" : null;
+  d.bring_dependants = v("bring_dependants") ? v("bring_dependants") === "yes" : null;
+  d.other_countries = f.getAll("other_countries");
+  d.previous_uk_refusal = !!f.get("previous_uk_refusal");
+  d.name = v("name"); d.phone = v("phone"); d.city = v("city"); d.email = v("email");
+  d.website = v("website");
+  d.consent = !!f.get("consent");
+  d.consent_text = $("consent-text").textContent;
+  d.utm_source = params.get("utm_source") || params.get("src") || "";
+  d.utm_campaign = params.get("utm_campaign") || "";
+  return d;
+}
+
+// ---- same logic as pipeline/enrich.py (kept short) ----
+function englishStatus(d) {
+  const need = IELTS[d.study_level || "pg_taught"];
+  if (["ielts","ielts_ukvi","pte","toefl","duolingo"].includes(d.english_test))
+    return d.english_score == null ? "unknown" : d.english_score >= need ? "meets" : "below";
+  if (d.english_test === "planned") return "needs_test";
+  if (d.english_medium && d.study_level !== "foundation") return "waiver_possible";
+  return d.english_test === "none" ? "needs_test" : "unknown";
+}
+function pickIntake(d, eng) {
+  const ready = d.has_passport && (eng === "meets" || eng === "waiver_possible");
+  const earliest = new Date(Date.now() + (ready ? 90 : 150) * 864e5);
+  const ok = INTAKES.filter(([, s]) => s >= earliest);
+  if (!ok.length) return [null, false];
+  const pref = INTAKES.find(([l]) => l === d.preferred_intake);
+  if (pref && pref[1] >= earliest) return [pref, false];
+  return [ok[0], !!pref];
+}
+function route(d) {
+  const l = d.study_level, q = d.highest_qualification, p = d.grade_percent, c = d.cgpa;
+  if (!l || !q) return "unknown";
+  if (l === "foundation") return "direct";
+  const school = ["matric","o_levels","fsc_hssc","a_levels","dae"];
+  if (l === "ug") {
+    if (q === "matric" || q === "o_levels") return "foundation";
+    if (q === "a_levels" || !school.includes(q)) return "direct";
+    if (p == null) return "check";
+    return p >= 70 ? "direct" : p >= 55 ? "check" : "foundation";
+  }
+  if (l === "phd") return (q === "masters" || q === "mphil") ? "direct" : "check";
+  if (school.includes(q)) return "foundation";
+  if (q === "bachelors_14") return (p != null && p < 50) ? "pre_masters" : "check";
+  const s4 = c != null ? c : p != null ? p / 25 : null;
+  if (s4 == null) return "check";
+  return s4 >= 3 ? "direct" : s4 >= 2.5 ? "check" : "pre_masters";
+}
+function costGBP(d, start) {
+  if (!d.study_level) return null;
+  const apply = start ? new Date(start - 45 * 864e5) : new Date();
+  const newRates = apply >= new Date("2026-11-30T00:00:00");
+  const m = d.location_pref === "london" ? (newRates ? 1570 : 1529) : (newRates ? 1203 : 1171);
+  return TUITION[d.study_level] + m * 9 + 558 + Math.round(776 * (YEARS[d.study_level] + .5)) + 1200;
+}
+function evaluate(d) {
+  const eng = englishStatus(d);
+  const [intake, pushed] = pickIntake(d, eng);
+  const gbp = costGBP(d, intake && intake[1]);
+  const lakh = gbp ? Math.round(gbp * GBP_TO_PKR / 1e4) / 10 : null;
+  const b = d.budget_pkr_lakh;
+  const budget = lakh == null ? "unknown" : b >= lakh ? "sufficient" : b >= .85 * lakh ? "tight" : "short";
+  return { eng, intake: intake && intake[0], pushed, gbp, lakh, budget, route: route(d) };
+}
+
+const tone = { sufficient:"good", tight:"warn", short:"bad", meets:"good", waiver_possible:"good", needs_test:"warn", below:"bad", direct:"good", check:"warn", foundation:"warn", pre_masters:"warn" };
+const pill = (txt, key) => tone[key] ? `<span class="pill ${tone[key]}">${txt}</span>` : txt;
+
+function renderPass() {
+  const d = data(), r = evaluate(d);
+  const city = d.city.toLowerCase();
+  $("p-from").textContent = CODES[city] || (d.city ? d.city.slice(0, 3).toUpperCase() : "PAK");
+  $("p-fromcity").textContent = d.city || "Your city";
+  $("p-to").textContent = d.location_pref === "london" ? "LON" : "UK";
+  $("p-tocity").textContent = d.location_pref === "london" ? "London" : d.location_pref === "outside" ? "Outside London" : "United Kingdom";
+  $("p-name").textContent = d.name || "—";
+  $("p-level").textContent = d.study_level ? LEVEL_NAME[d.study_level] + (d.subject ? " · " + d.subject : "") : "—";
+  $("p-intake").textContent = r.intake || "—";
+  $("p-cost").textContent = r.lakh ? `≈ ${r.lakh} lakh` : "—";
+  $("p-budget").innerHTML = cur >= 3 ? pill(`${d.budget_pkr_lakh} lakh`, r.budget) : "—";
+  $("p-eng").innerHTML = d.english_test ? pill(ENG_NAME[r.eng], r.eng) : "—";
+  $("p-route").innerHTML = d.highest_qualification ? pill(ROUTE_NAME[r.route], r.route) : "—";
+  $("bval").textContent = d.budget_pkr_lakh;
+  $("score-wrap").hidden = !["ielts","ielts_ukvi","pte","toefl","duolingo"].includes($("etest").value);
+}
+
+function show(i) {
+  cur = i;
+  steps.forEach((s, k) => s.hidden = k !== i);
+  [...$("progress").children].forEach((b, k) => b.classList.toggle("on", k <= i));
+  $("back").hidden = i === 0;
+  $("next").textContent = i === steps.length - 1 ? "See my result" : "Next";
+  $("err").textContent = "";
+  renderPass();
+}
+
+function validate(i) {
+  const d = data();
+  if (i === 0 && !d.study_level) return "Choose what you want to study.";
+  if (i === 1 && !d.highest_qualification) return "Choose your highest qualification.";
+  if (i === 2 && !d.english_test) return "Tell us about your English test.";
+  if (i === 3 && !d.funding_source) return "Choose how you'll fund your studies.";
+  if (i === 4 && d.has_passport == null) return "Tell us whether you have a passport.";
+  if (i === 5) {
+    if (!d.name) return "Enter your name.";
+    if (!/^(\+?92|0)?3\d{9}$/.test(d.phone.replace(/[\s-]/g, "")) && !/^\+\d{8,15}$/.test(d.phone.replace(/[\s-]/g, "")))
+      return "Enter a WhatsApp number like 0300 1234567.";
+    if (!d.consent) return "Tick the box so a counselor can send you your plan.";
+  }
+  return "";
+}
+
+async function submit() {
+  const d = data(), r = evaluate(d);
+  $("next").disabled = true;
+  let sent = false;
+  if (PIPELINE_URL && !d.website) {
+    try {
+      const res = await fetch(PIPELINE_URL, { method: "POST",
+        headers: { "Content-Type": "application/json", ...(QUIZ_KEY ? { "X-Quiz-Key": QUIZ_KEY } : {}) },
+        body: JSON.stringify(d) });
+      sent = res.ok;
+    } catch (e) { sent = false; }
+  }
+  renderResult(d, r, sent);
+}
+
+function renderResult(d, r, sent) {
+  steps.forEach(s => s.hidden = true);
+  $("nav").hidden = true; $("progress").hidden = true;
+  const first = d.name.split(" ")[0];
+  const v = [];
+  const gap = r.lakh != null ? Math.round((d.budget_pkr_lakh - r.lakh) * 10) / 10 : null;
+  v.push([tone[r.budget], r.budget === "sufficient" ? "Your budget covers year one" : r.budget === "tight" ? "Your budget is tight" : "Your budget is short for now",
+    `Estimated year one: about ${r.lakh} lakh PKR (£${r.gbp.toLocaleString("en-GB")}). ` +
+    (gap >= 0 ? `You have about ${gap} lakh spare.` : `You're about ${Math.abs(gap)} lakh short — lower-fee universities, scholarships or instalment plans can close this.`)]);
+  v.push([tone[r.route] || "warn", ROUTE_NAME[r.route],
+    { direct: "Your grades fit direct entry at many UK universities.", check: "Some universities will take you directly; a counselor will shortlist them.",
+      foundation: "You'd start with a foundation year, then move into the degree.", pre_masters: "A short pre-master's course gets you into the master's.", unknown: "We'll check your transcripts." }[r.route]]);
+  v.push([tone[r.eng] || "warn", "English: " + ENG_NAME[r.eng],
+    { meets: "Your score meets the usual requirement.", below: `Most ${LEVEL_NAME[d.study_level]} courses ask for about IELTS ${IELTS[d.study_level]}.`,
+      waiver_possible: "Many UK universities accept English-medium study instead of IELTS for degree courses.", needs_test: "Book IELTS UKVI or PTE; we can help you plan.", unknown: "We'll confirm with you." }[r.eng]]);
+  v.push([r.pushed ? "warn" : "good", "Realistic intake: " + (r.intake || "to be confirmed"),
+    r.pushed ? `${d.preferred_intake} is too close to prepare a strong application. ${r.intake} gives you time.` : "There's enough time for offer, CAS and visa if you start now."]);
+  if (d.bring_dependants && d.study_level !== "phd")
+    v.push(["bad", "Family can't join on this course", "UK rules only allow dependants for PhD/research degrees or government-sponsored students."]);
+
+  const steps2 = [];
+  if (!d.has_passport) steps2.push("Apply for your passport now — it can take several weeks.");
+  if (r.eng === "needs_test" || r.eng === "below") steps2.push("Book your English test.");
+  steps2.push("Keep your transcripts and degree certificates ready (HEC attestation for degrees).");
+  steps2.push("Funds must sit in the bank for 28 days before your visa application.");
+
+  $("result").innerHTML = `<h2>${first ? first + ", here's" : "Here's"} your UK plan</h2>
+    <p>${sent ? "We've sent this to our counselors. Expect a WhatsApp message within one working day." : "A counselor can turn this into a university shortlist for you."}</p>
+    <div class="verdicts">${v.map(([t, h, s]) => `<div class="verdict"><i class="${t}"></i><div><b>${h}</b><span>${s}</span></div></div>`).join("")}</div>
+    <div class="step-label">Next steps</div><ol>${steps2.map(s => `<li>${s}</li>`).join("")}</ol>`;
+  $("result").hidden = false;
+  $("p-no").textContent = "No. " + Math.random().toString(36).slice(2, 8).toUpperCase();
+  $("p-foot").textContent = r.budget === "sufficient" && r.route === "direct" ? "READY TO APPLY" : "PLAN IN PROGRESS";
+  renderPass();
+  $("result").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+
+$("next").addEventListener("click", () => {
+  const e = validate(cur);
+  if (e) { $("err").textContent = e; return; }
+  if (cur < steps.length - 1) show(cur + 1); else submit();
+});
+$("back").addEventListener("click", () => show(cur - 1));
+form.addEventListener("input", renderPass);
+form.addEventListener("change", renderPass);
+form.addEventListener("submit", e => e.preventDefault());
+show(0);
+</script>
