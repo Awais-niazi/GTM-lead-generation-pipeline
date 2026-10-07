@@ -208,3 +208,24 @@ def test_csv_neutralises_formulas():
     assert "'=HYPERLINK" in raw and ",+923001234567," in raw   # phone left alone
     workflow.sync(TODAY)                                       # reading back strips the guard
     assert store.get(lead.lead_id).name.startswith("=HYPERLINK")
+
+
+def test_real_calcom_payload_shape():
+    """Shape captured from a live booking (2026-10-07): wrapped answers, phone-only placeholder
+    email, and the organizer's own number as the top-level location."""
+    payload = {
+        "uid": "9DrHT8kiND5MGrye25YhR9", "startTime": "2026-10-07T07:30:00.000Z",
+        "responses": {
+            "name": {"label": "your_name", "value": "Hina Shah", "isHidden": False},
+            "email": {"label": "email_address", "value": "923211234567@sms.cal.com", "isHidden": False},
+            "attendeePhoneNumber": {"label": "phone_number", "value": "+923211234567", "isHidden": False},
+            "location": {"label": "location", "value": {"value": "userPhone", "optionValue": ""}, "isHidden": False},
+            "consent": {"label": "consent", "value": True, "isHidden": False},
+        },
+        "location": "+923154847419",                  # the organizer's number, not the student's
+        "attendees": [{"name": "Hina Shah", "email": "923211234567@sms.cal.com", "timeZone": "Asia/Karachi"}],
+    }
+    lead = workflow.handle_booking(booking_event("BOOKING_CREATED", **payload), TODAY)
+    assert lead.name == "Hina Shah" and lead.phone_e164 == "+923211234567"
+    assert lead.email == "" and lead.consent
+    assert lead.call_at == "2026-10-07T12:30+05:00"

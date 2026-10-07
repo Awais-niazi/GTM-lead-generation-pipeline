@@ -342,21 +342,30 @@ def opt_out(phone: str, today: date | None = None) -> Lead | None:
 
 
 def _answer(p: dict, *keys: str) -> str:
-    """A booking-form answer. Values arrive as plain strings or {"value": ...}; a phone-call
-    location arrives as {"value": "phone", "optionValue": "+92..."}."""
+    """A booking-form answer. Cal.com wraps each one as {"label", "value", "isHidden"}; a location
+    value nests once more as {"value": "phone", "optionValue": "+92..."}; name can be
+    {firstName, lastName}. Older payloads send bare values."""
     responses = p.get("responses") or {}
     for k in keys:
         v = responses.get(k)
+        for _ in range(2):                           # unwrap {label, value} then {value, optionValue}
+            if isinstance(v, dict) and ("value" in v or "optionValue" in v):
+                v = v.get("optionValue") or v.get("value")
         if isinstance(v, dict):
-            v = v.get("optionValue") or v.get("value")
-        if isinstance(v, dict):                      # name can be {firstName, lastName}
             v = " ".join(str(x) for x in v.values() if x)
-        if v:
+        if v not in (None, "", [], {}):
             return str(v)
     return ""
 
 
+def _real_email(e: str) -> str:
+    """Cal.com invents <phone>@sms.cal.com when the email field is hidden; that isn't a contact."""
+    e = (e or "").strip().lower()
+    return "" if e.endswith("@sms.cal.com") else e
+
+
 def _booking_phone(p: dict) -> str:
+    # Never the top-level "location": with a "Phone call" location that's *your* number.
     return normalize_phone(_answer(p, "attendeePhoneNumber", "phone", "location"))
 
 
@@ -370,8 +379,8 @@ def _find_booking_lead(p: dict) -> Lead | None:
         return lead
     if (phone := _booking_phone(p)) and (lead := store.get(Lead(phone_e164=phone).compute_id())):
         return lead
-    emails = {(a.get("email") or "").strip().lower() for a in p.get("attendees") or []}
-    emails |= {_answer(p, "email").strip().lower()}
+    emails = {_real_email(a.get("email")) for a in p.get("attendees") or []}
+    emails |= {_real_email(_answer(p, "email"))}
     emails.discard("")
     return next((l for l in leads if l.email.strip().lower() in emails), None) if emails else None
 
@@ -396,7 +405,7 @@ def handle_booking(event: dict, today: date | None = None) -> Lead | None:
         attendee = (p.get("attendees") or [{}])[0]
         lead = process(Lead(source="booking", source_ref=p.get("uid", ""),
                             name=_answer(p, "name") or attendee.get("name", ""),
-                            email=_answer(p, "email") or attendee.get("email", ""),
+                            email=_real_email(_answer(p, "email") or attendee.get("email", "")),
                             phone=_booking_phone(p)),
                        event, today, notify=False)
         if not lead.lead_id:
