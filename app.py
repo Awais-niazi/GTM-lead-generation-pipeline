@@ -24,6 +24,7 @@ from pipeline import sinks, sources, store, workflow
 from pipeline.process import process
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.getLogger().setLevel(logging.INFO)   # Lambda pre-installs a handler, so basicConfig is a no-op there
 log = logging.getLogger("uk-leads")
 
 app = FastAPI(title=f"{C.BRAND_NAME} UK lead pipeline")

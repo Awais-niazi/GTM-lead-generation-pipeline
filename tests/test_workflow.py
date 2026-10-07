@@ -154,10 +154,14 @@ def test_cooked_ships_once_and_only_with_handoff_consent():
     assert len(store.deliveries()) == 1 and len(delivery_rows()) == 1
 
 
-def test_delivery_log_is_write_once():
+def test_delivery_log_is_write_once(tmp_store):
     lead = process(hot_quiz(handoff_consent=True), today=TODAY, notify=False)
     edit_csv(C.CSV_FALLBACK, lead.lead_id, stage="Cooked", handoff_consent="Yes")
     workflow.sync(TODAY)
+    assert store.log_delivery(store.get(lead.lead_id), "tampered brief") is False   # both backends
+    assert store.deliveries()[0]["brief"] != "tampered brief"
+    if tmp_store == "dynamodb":
+        return                       # DynamoDB: the IAM role also denies Update/Delete (deploy test)
     con = sqlite3.connect(C.DB_PATH)
     with pytest.raises(sqlite3.DatabaseError, match="write-once"):
         con.execute("UPDATE deliveries SET brief='x'")

@@ -59,17 +59,18 @@ def todo() -> None:
 
 def rescore() -> None:
     sync()                                   # never overwrite unsynced sheet edits
-    for lead in store.all_leads():
+    leads = store.all_leads()
+    for lead in leads:
         before = lead.tier
         enrich(lead)
         score(lead)
         workflow.refresh(lead)
         store.save(lead, {"rescore": True})
-        sinks.write(lead)
         if before != lead.tier:
             print(f"{lead.lead_id} {before} → {lead.tier}")
             if lead.tier == "Hot" and lead.consent and lead.stage == "New":
                 sinks.alert_hot(lead)
+    print(f"{len(leads)} leads rescored → {sinks.write_all(leads)}")   # one Sheets request
     todo()
 
 

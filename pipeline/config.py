@@ -27,8 +27,11 @@ TIMEZONE = os.getenv("TIMEZONE", "Asia/Karachi")     # how call times are shown 
 # Google Sheets
 GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
-SHEET_TAB = os.getenv("SHEET_TAB", "Leads")                # your working tab
-DELIVERY_TAB = os.getenv("DELIVERY_TAB", "Delivery")       # shipped leads, shared with the agency
+SHEET_TAB = os.getenv("SHEET_TAB", "Leads")                # your working tab (private)
+# Shipped leads go to a *separate* spreadsheet you share with the agency — Sheets can't share
+# one tab, so sharing the main spreadsheet would expose every lead. Falls back to the main one.
+DELIVERY_SHEET_ID = os.getenv("DELIVERY_SHEET_ID", "") or GOOGLE_SHEET_ID
+DELIVERY_TAB = os.getenv("DELIVERY_TAB", "Delivery")
 
 # Meta (Facebook / Instagram lead ads + WhatsApp Cloud API share one app)
 META_VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN", "change-me")
@@ -49,6 +52,13 @@ AGENCY_WHATSAPP = _numbers("AGENCY_WHATSAPP")
 
 # Shared secret the landing page sends so randoms can't spam the quiz webhook
 QUIZ_SHARED_KEY = os.getenv("QUIZ_SHARED_KEY", "")
+
+# Storage: "sqlite" (local) or "dynamodb" (AWS Lambda; tables made by deploy/aws_deploy.py)
+STORE = os.getenv("STORE", "sqlite")
+DYNAMO_PREFIX = os.getenv("DYNAMO_PREFIX", "enrolliq")
+AWS_REGION = os.getenv("AWS_REGION", "")
+# On Lambda the Google key lives encrypted in SSM Parameter Store instead of a file
+GOOGLE_SERVICE_ACCOUNT_SSM = os.getenv("GOOGLE_SERVICE_ACCOUNT_SSM", "")
 
 DB_PATH = os.getenv("DB_PATH", "leads.db")
 CSV_FALLBACK = os.getenv("CSV_FALLBACK", "leads_export.csv")

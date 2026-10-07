@@ -1,0 +1,7 @@
+# What the Lambda package needs (boto3 is already in the Lambda runtime).
+fastapi>=0.115
+pydantic>=2.7
+httpx>=0.27
+gspread>=6.1
+google-auth>=2.30
+mangum>=0.17

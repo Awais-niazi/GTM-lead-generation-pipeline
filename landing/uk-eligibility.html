@@ -1,4 +1,4 @@
-<title>UK Study Pass</title>
+<title>Enrolliq · UK eligibility check</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
@@ -128,14 +128,16 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .cta { display: grid; gap: 8px; padding: 16px; margin-bottom: 20px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft); }
 .cta b { font: 700 18px/1.2 var(--f-display); font-stretch: 92%; }
 .cta span { color: var(--muted); font-size: 14.5px; }
-.cta a { justify-self: start; font: 600 16px/1 var(--f-body); border-radius: 8px; padding: 13px 20px; background: var(--accent); color: var(--accent-ink); text-decoration: none; }
+.cal-inline { width: 100%; min-height: 460px; overflow: auto; border-radius: 8px; background: var(--surface); }
+.cta small { color: var(--muted); font-size: 13px; }
+.cta small a { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
 <div class="wrap">
   <header class="top">
-    <div class="brand" id="brand">Your Brand</div>
+    <div class="brand" id="brand">Enrolliq</div>
     <small>UK intakes: Jan · May · Sep</small>
   </header>
 
@@ -271,7 +273,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
         <datalist id="cities"><option>Lahore</option><option>Karachi</option><option>Islamabad</option><option>Rawalpindi</option><option>Faisalabad</option><option>Multan</option><option>Peshawar</option><option>Gujranwala</option><option>Sialkot</option><option>Quetta</option><option>Hyderabad</option></datalist>
         <label class="f">Email <span class="hint">Optional</span><input type="email" name="email" id="email" autocomplete="email"></label>
         <input class="hp" type="text" name="website" id="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-        <label class="check"><input type="checkbox" name="consent" id="consent"> <span id="consent-text">I agree that <span class="brand-name">Your Brand</span> may contact me on WhatsApp, phone and email about studying in the UK, and may share my details with a partner UK study consultancy to help with my application. I can opt out anytime by replying STOP.</span></label>
+        <label class="check"><input type="checkbox" name="consent" id="consent"> <span id="consent-text">I agree that <span class="brand-name">Enrolliq</span> may contact me on WhatsApp, phone and email about studying in the UK, and may share my details with a partner UK study consultancy to help with my application. I can opt out anytime by replying STOP.</span></label>
       </fieldset>
 
       <!-- result -->
@@ -311,7 +313,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 /* ===== Settings — edit these lines when you host the page ===== */
 const PIPELINE_URL = "";          // e.g. "https://api.yourbrand.pk/webhook/quiz"
 const QUIZ_KEY = "";              // must match QUIZ_SHARED_KEY on the server
-const BRAND = "Your Brand";       // must match BRAND_NAME on the server
+const BRAND = "Enrolliq";         // must match BRAND_NAME on the server
 const GBP_TO_PKR = 375;
 /* ================================================================== */
 
@@ -514,18 +516,40 @@ function renderResult(d, r, sent, server = {}) {
   const intro = !sent ? "Save this page — it's your starting point."
     : book ? "Your answers look promising. The next step is a quick call to check the details."
     : "We'll WhatsApp you intake reminders, cost updates and IELTS tips so you're ready when the time is right.";
-  const cta = book ? `<div class="cta"><b>Book a free 10-minute WhatsApp call</b>
-      <span>We'll go through your budget, documents and timeline, and tell you honestly if you're ready to apply.</span>
-      <a href="${esc(server.booking_url)}" target="_blank" rel="noopener">Pick a time</a></div>` : "";
+  const cta = book ? `<div class="cta" id="cta"><b>Book a free 10-minute WhatsApp call</b>
+      <span>We'll go through your budget, documents and timeline, and tell you honestly if you're ready to apply. Pick a time below.</span>
+      <div class="cal-inline" id="cal-inline"></div>
+      <small>Calendar not loading? <a href="${esc(server.booking_url)}" target="_blank" rel="noopener">Open it in a new tab</a>.</small></div>` : "";
   $("result").innerHTML = `<h2>${first ? esc(first) + ", here's" : "Here's"} your UK plan</h2>
     <p>${intro}</p>${cta}
     <div class="verdicts">${v.map(([t, h, s]) => `<div class="verdict"><i class="${t}"></i><div><b>${h}</b><span>${s}</span></div></div>`).join("")}</div>
     <div class="step-label">Next steps</div><ol>${steps2.map(s => `<li>${s}</li>`).join("")}</ol>`;
   $("result").hidden = false;
+  if (book) mountCalendar(server.booking_url);
   $("p-no").textContent = "No. " + Math.random().toString(36).slice(2, 8).toUpperCase();
   $("p-foot").textContent = r.budget === "sufficient" && r.route === "direct" ? "READY TO APPLY" : "PLAN IN PROGRESS";
   renderPass();
   $("result").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+
+// Cal.com inline embed. The server's booking_url already carries the student's name, phone and
+// metadata[lead_id], so the booking webhook ties straight back to this lead.
+function mountCalendar(url) {
+  const u = new URL(url);
+  const config = Object.fromEntries(u.searchParams);
+  config.layout = "month_view";
+  config.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  (function (C, A, L) { let p = function (a, ar) { a.q.push(ar); }; let d = C.document; C.Cal = C.Cal || function () { let cal = C.Cal; let ar = arguments; if (!cal.loaded) { cal.ns = {}; cal.q = cal.q || []; d.head.appendChild(d.createElement("script")).src = A; cal.loaded = true; } if (ar[0] === L) { const api = function () { p(api, arguments); }; const namespace = ar[1]; api.q = api.q || []; if (typeof namespace === "string") { cal.ns[namespace] = cal.ns[namespace] || api; p(cal.ns[namespace], ar); p(cal, ["initNamespace", namespace]); } else p(cal, ar); return; } p(cal, ar); }; })(window, "https://app.cal.com/embed/embed.js", "init");
+  Cal("init", "ukcall", { origin: "https://app.cal.com" });
+  Cal.ns.ukcall("inline", { elementOrSelector: "#cal-inline", calLink: u.pathname.replace(/^\//, ""), config });
+  // Hide the host panel: it shows the Cal.com profile name, which isn't the brand yet.
+  Cal.ns.ukcall("ui", { hideEventTypeDetails: true, layout: "month_view" });
+  const booked = () => {
+    $("p-foot").textContent = "CALL BOOKED";
+    $("cta").querySelector("span").textContent = "You're booked. We'll WhatsApp-call you at that time. Check your WhatsApp for any message from us before then.";
+  };
+  Cal.ns.ukcall("on", { action: "bookingSuccessfulV2", callback: booked });
+  Cal.ns.ukcall("on", { action: "bookingSuccessful", callback: booked });
 }
 
 $("next").addEventListener("click", () => {

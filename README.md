@@ -60,16 +60,19 @@ Without Google credentials the pipeline writes `leads_export.csv` instead, so yo
 ### 2. Google Sheets
 1. Google Cloud console → create project → enable **Google Sheets API** and **Google Drive API**.
 2. Create a **service account**, download its JSON key as `service_account.json`.
-3. Create a sheet, share it (Editor) with the service account's email.
-4. Put the sheet ID from its URL into `GOOGLE_SHEET_ID`.
+3. Create **two** spreadsheets: your private one (e.g. "Leads — private") and one for the agency
+   (e.g. "Deliveries — <agency>"). Share **both** (Editor) with the service account's email.
+4. Put their IDs (the long part of each URL between `/d/` and `/edit`) into `GOOGLE_SHEET_ID`
+   and `DELIVERY_SHEET_ID`. Share only the Deliveries spreadsheet with the agency.
 
 Two tabs are created automatically, with headers and dropdowns:
 
 - **Leads** (yours): every lead. You edit `stage`, `decision_maker`, `handoff_consent`,
   `reason`, `revisit_on` (dd/mm/yyyy or yyyy-mm-dd) and `notes`. Everything else is
   written by the pipeline.
-- **Delivery** (share this tab with the agency, or copy it to a sheet they can edit):
-  one row per shipped lead, with a brief. The agency fills in `agency_stage`,
+- **Delivery**, in a **separate spreadsheet** (`DELIVERY_SHEET_ID`) that you share with the
+  agency. Sheets can't share a single tab, so sharing the main spreadsheet would show them every
+  lead. One row per shipped lead, with a brief. The agency fills in `agency_stage`,
   `agency_contacted_on` and `agency_notes`; the pipeline only reads those.
 
 Values are written as plain text, so nothing a student types can run as a formula.
@@ -181,6 +184,32 @@ python run.py rescore      # sync, re-enrich + re-score, alert on new Hot leads,
 ```
 Old lists from expos or past inquiries: `python run.py import file.csv` (column names =
 Lead fields; see `samples/sample_leads.csv`).
+
+## Deploy to AWS for $0
+
+Runs entirely on AWS **Always Free** services: Lambda (+ a public Function URL), DynamoDB
+(provisioned, 25 RCU / 25 WCU in total), EventBridge Scheduler, SSM Parameter Store and CloudWatch
+Logs with 14-day retention. No EC2, RDS, NAT gateway, load balancer, API Gateway or S3.
+
+```bash
+.venv/bin/aws configure                         # once: access key of an IAM user + your region
+.venv/bin/python deploy/aws_deploy.py           # creates/updates everything; prints the API URL
+.venv/bin/python deploy/aws_deploy.py --code    # later: ship code changes only
+```
+The script reads settings from `.env`, stores `service_account.json` encrypted in SSM, and
+writes `deploy/site/index.html` (the quiz with the live API URL filled in) for Netlify Drop.
+Point the Cal.com webhook at `<API URL>webhook/booking`.
+
+Some new AWS accounts (the "Free plan" ones inside an AWS-managed organization) may only use the
+region they were created in; an `explicit deny in a service control policy` error means use that
+region. This deployment runs in `ap-southeast-2` (Sydney) for that reason.
+
+Schedules: `sync` every 10 minutes, `rescore` daily at 06:00 PKT. Logs:
+`.venv/bin/aws logs tail /aws/lambda/enrolliq-api --follow`.
+
+Keep a **zero-spend budget** (Billing → Budgets → "Zero spend budget") so AWS emails you if
+anything ever costs a cent. After the 6-month free plan ends, upgrade to the paid plan: these
+services stay free within their monthly limits.
 
 ## Compliance
 

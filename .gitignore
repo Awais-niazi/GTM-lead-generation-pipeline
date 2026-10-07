@@ -7,3 +7,6 @@ delivery_export.csv
 __pycache__/
 .venv/
 venv/
+deploy/.build/
+deploy/site/
+*.zip

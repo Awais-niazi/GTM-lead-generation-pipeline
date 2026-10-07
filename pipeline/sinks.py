@@ -2,7 +2,8 @@
 
 Two tabs:
   * working tab  (C.SHEET_TAB)    — every lead; yours. You edit WORKING_EDITABLE columns.
-  * delivery tab (C.DELIVERY_TAB) — shipped leads only; shared with the agency, who edit
+  * delivery tab (C.DELIVERY_TAB, in C.DELIVERY_SHEET_ID) — shipped leads only; a separate
+                                    spreadsheet shared with the agency, who edit
                                     AGENCY_EDITABLE columns. Rows are written once.
 Both are read back by pipeline.workflow.
 """
@@ -50,23 +51,45 @@ def _csv_safe(v) -> str:
 
 
 def _use_sheets() -> bool:
-    return bool(C.GOOGLE_SHEET_ID) and os.path.exists(C.GOOGLE_SERVICE_ACCOUNT_FILE)
+    return bool(C.GOOGLE_SHEET_ID) and bool(C.GOOGLE_SERVICE_ACCOUNT_SSM
+                                           or os.path.exists(C.GOOGLE_SERVICE_ACCOUNT_FILE))
 
 
 # --------------------------------------------------------------------------- Google Sheets
-_ws: dict[str, object] = {}
+_ws: dict[tuple[str, str], object] = {}
+_gc = None
 
 
-def _worksheet(tab: str, columns: list[str], dropdowns: dict[str, list[str]]):
-    if tab in _ws:
-        return _ws[tab]
+def _client():
+    """gspread client from the key file (local) or the SSM SecureString (Lambda)."""
+    global _gc
+    if _gc is None:
+        import gspread
+        if C.GOOGLE_SERVICE_ACCOUNT_SSM:
+            import boto3
+            p = boto3.client("ssm", region_name=C.AWS_REGION or None).get_parameter(
+                Name=C.GOOGLE_SERVICE_ACCOUNT_SSM, WithDecryption=True)
+            _gc = gspread.service_account_from_dict(json.loads(p["Parameter"]["Value"]))
+        else:
+            _gc = gspread.service_account(filename=C.GOOGLE_SERVICE_ACCOUNT_FILE)
+    return _gc
+
+
+def _worksheet(sheet_id: str, tab: str, columns: list[str], dropdowns: dict[str, list[str]]):
+    if (sheet_id, tab) in _ws:
+        return _ws[(sheet_id, tab)]
     import gspread
-    gc = gspread.service_account(filename=C.GOOGLE_SERVICE_ACCOUNT_FILE)
-    sh = gc.open_by_key(C.GOOGLE_SHEET_ID)
+    sh = _client().open_by_key(sheet_id)
     try:
         ws = sh.worksheet(tab)
     except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(tab, rows=1000, cols=len(columns))
+        sheets = sh.worksheets()
+        if len(sheets) == 1 and not any(c for r in sheets[0].get_all_values() for c in r):  # new: reuse "Sheet1"
+            ws = sheets[0]
+            ws.update_title(tab)
+            ws.resize(rows=1000, cols=len(columns))
+        else:
+            ws = sh.add_worksheet(tab, rows=1000, cols=len(columns))
     if ws.row_values(1) != columns:
         ws.update([columns], "A1")
         ws.freeze(rows=1)
@@ -78,20 +101,21 @@ def _worksheet(tab: str, columns: list[str], dropdowns: dict[str, list[str]]):
             "rule": {"condition": {"type": "ONE_OF_LIST", "values": [{"userEnteredValue": o} for o in opts]},
                      "strict": True, "showCustomUi": True},
         }} for col, opts in dropdowns.items()]})
-    _ws[tab] = ws
+    _ws[(sheet_id, tab)] = ws
     return ws
 
 
-def _sheet_records(tab: str, columns: list[str], dropdowns: dict) -> list[dict]:
-    values = _worksheet(tab, columns, dropdowns).get_all_values()
+def _sheet_records(sheet_id: str, tab: str, columns: list[str], dropdowns: dict) -> list[dict]:
+    values = _worksheet(sheet_id, tab, columns, dropdowns).get_all_values()
     if not values:
         return []
     header = values[0]
     return [dict(zip(header, r)) for r in values[1:] if r and r[0]]
 
 
-def _sheet_upsert(tab: str, columns: list[str], dropdowns: dict, row: list, replace: bool) -> None:
-    ws = _worksheet(tab, columns, dropdowns)
+def _sheet_upsert(sheet_id: str, tab: str, columns: list[str], dropdowns: dict, row: list,
+                  replace: bool) -> None:
+    ws = _worksheet(sheet_id, tab, columns, dropdowns)
     ids = ws.col_values(1)
     if row[0] in ids:
         if replace:
@@ -133,7 +157,8 @@ def write(lead: Lead) -> str:
     d = lead.model_dump()
     if _use_sheets():
         try:
-            _sheet_upsert(C.SHEET_TAB, SHEET_COLUMNS, WORKING_DROPDOWNS, _row(d, SHEET_COLUMNS), replace=True)
+            _sheet_upsert(C.GOOGLE_SHEET_ID, C.SHEET_TAB, SHEET_COLUMNS, WORKING_DROPDOWNS,
+                          _row(d, SHEET_COLUMNS), replace=True)
             return "sheet"
         except Exception as e:  # never lose a lead because Sheets hiccuped
             log.exception("Sheets write failed, falling back to CSV: %s", e)
@@ -142,10 +167,37 @@ def write(lead: Lead) -> str:
     return "csv"
 
 
+def write_all(leads: list[Lead]) -> str:
+    """Rewrite every lead's row in one request (daily rescore). Rows keep their positions;
+    rows for ids not in `leads` are left as they are; new leads are appended."""
+    rows = {l.lead_id: _row(l.model_dump(), SHEET_COLUMNS) for l in leads if l.lead_id}
+    if _use_sheets():
+        try:
+            ws = _worksheet(C.GOOGLE_SHEET_ID, C.SHEET_TAB, SHEET_COLUMNS, WORKING_DROPDOWNS)
+            current = ws.get_all_values()[1:]
+            grid = [SHEET_COLUMNS] + [rows.pop(r[0], r) if r else r for r in current] + list(rows.values())
+            width = len(SHEET_COLUMNS)
+            grid = [(list(r) + [""] * width)[:width] for r in grid]
+            if len(grid) > ws.row_count:
+                ws.resize(rows=len(grid) + 200)
+            ws.update(grid, "A1", value_input_option="RAW")
+            return "sheet"
+        except Exception as e:
+            log.exception("Sheets batch write failed, falling back to CSV: %s", e)
+    existing = {r["lead_id"]: r for r in _csv_records(C.CSV_FALLBACK)}
+    existing.update({i: dict(zip(SHEET_COLUMNS, r)) for i, r in rows.items()})
+    with open(C.CSV_FALLBACK, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=SHEET_COLUMNS, extrasaction="ignore")
+        w.writeheader()
+        w.writerows({c: _csv_safe(r.get(c, "")) for c in SHEET_COLUMNS}
+                    for r in sorted(existing.values(), key=_score_desc))
+    return "csv"
+
+
 def read_working() -> list[dict]:
     """Rows of the working tab as {column: text}. Raises if Sheets is configured but unreachable."""
     if _use_sheets():
-        return _sheet_records(C.SHEET_TAB, SHEET_COLUMNS, WORKING_DROPDOWNS)
+        return _sheet_records(C.GOOGLE_SHEET_ID, C.SHEET_TAB, SHEET_COLUMNS, WORKING_DROPDOWNS)
     return _csv_records(C.CSV_FALLBACK)
 
 
@@ -159,7 +211,7 @@ def write_delivery(lead: Lead, brief: str) -> str:
     d = {**lead.model_dump(), "brief": brief}
     if _use_sheets():
         try:
-            _sheet_upsert(C.DELIVERY_TAB, DELIVERY_COLUMNS, DELIVERY_DROPDOWNS,
+            _sheet_upsert(C.DELIVERY_SHEET_ID, C.DELIVERY_TAB, DELIVERY_COLUMNS, DELIVERY_DROPDOWNS,
                           _row(d, DELIVERY_COLUMNS), replace=False)
             return "sheet"
         except Exception as e:
@@ -171,7 +223,7 @@ def write_delivery(lead: Lead, brief: str) -> str:
 
 def read_delivery() -> list[dict]:
     if _use_sheets():
-        return _sheet_records(C.DELIVERY_TAB, DELIVERY_COLUMNS, DELIVERY_DROPDOWNS)
+        return _sheet_records(C.DELIVERY_SHEET_ID, C.DELIVERY_TAB, DELIVERY_COLUMNS, DELIVERY_DROPDOWNS)
     return _csv_records(C.DELIVERY_CSV)
 
 
