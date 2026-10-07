@@ -13,10 +13,14 @@ def _budget(lead: Lead) -> int:
     elif s == "tight":
         pts = round(w * 0.65)
     elif s == "short":
-        ratio = (lead.budget_pkr_lakh or 0) / (lead.est_first_year_cost_pkr_lakh or 1)
+        ratio = (lead.budget_pkr_lakh or 0) / (lead.est_fees_pkr_lakh or 1)
         pts = round(w * 0.3) if ratio >= 0.6 else 0
     else:
         pts = round(w * 0.25)
+    if lead.funds_proof == "no":                 # can't show 28-day living funds → no visa
+        pts = min(pts, 5)
+    elif lead.funds_proof == "not_sure":
+        pts = max(0, pts - 5)
     if lead.funding_source == "scholarship_only":
         pts = min(pts, 5)
     elif lead.funding_source == "loan":
@@ -94,9 +98,13 @@ def _next_action(lead: Lead) -> str:
             gaps.append("IELTS plan")
         if lead.budget_status in ("tight", "short"):
             gaps.append("budget options outside London")
+        if lead.funds_proof == "not_sure":
+            gaps.append("28-day living funds")
         extra = f" · discuss {', '.join(gaps)}" if gaps else ""
         return "WhatsApp today, call within 24h" + extra
     if lead.tier == "Nurture":
+        if lead.funds_proof == "no":
+            return "Nurture: explain the 28-day living-funds rule; revisit when the family can show it"
         if lead.budget_status == "short":
             return "Nurture: low-cost universities, instalment plans, foundation routes"
         if lead.english_status in ("needs_test", "below"):
@@ -123,7 +131,7 @@ def score(lead: Lead) -> Lead:
     # Hard caps: some issues block a 'Hot' label regardless of the rest.
     if lead.bring_dependants and lead.study_level != "phd":
         total = min(total, 60)
-    if lead.budget_status == "short":
+    if lead.budget_status == "short" or lead.funds_proof == "no":
         total = min(total, 55)
     if lead.previous_uk_refusal:          # needs senior review before anyone promises anything
         total = min(total, 65)

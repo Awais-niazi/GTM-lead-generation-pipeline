@@ -34,6 +34,7 @@
   --good: #3cc49b; --warn: #f0a83a; --bad: #f2756b; color-scheme: dark; }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }   /* fieldset/label display:grid would otherwise override it */
 body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--f-body); }
 .wrap { max-width: 1120px; margin: 0 auto; padding: 32px 20px 56px; }
 header.top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
@@ -43,7 +44,7 @@ h1 { font: 800 clamp(30px, 5vw, 50px)/1.02 var(--f-display); font-stretch: 82%; 
 .lede { color: var(--muted); max-width: 52ch; margin: 0 0 28px; font-size: 18px; }
 
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 32px; align-items: start; }
-@media (max-width: 880px) { .grid { grid-template-columns: minmax(0, 1fr); } .pass-col { order: -1; } }
+@media (max-width: 880px) { .grid { grid-template-columns: minmax(0, 1fr); } .pass-col { order: -1; position: static; } }  /* sticky on phones covered the form */
 
 /* ---- form ---- */
 form { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 24px; min-width: 0; }
@@ -142,7 +143,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   </header>
 
   <h1>Can you study in the UK in 2027?</h1>
-  <p class="lede">Answer six short questions. You'll see your realistic first-year cost in PKR, the intake you can make, and what's missing from your file.</p>
+  <p class="lede">Answer six short questions. You'll see your year-one fees in PKR, the living funds the visa needs, the intake you can make, and what's missing from your file.</p>
 
   <div class="grid">
     <form id="quiz" novalidate>
@@ -211,12 +212,19 @@ button:disabled { opacity: .5; cursor: not-allowed; }
       <!-- 4 -->
       <fieldset data-step="4" hidden>
         <div class="step-label">Step 4 of 6</div>
-        <legend>Budget for the first year</legend>
-        <label class="f">Total your family can arrange for year one <span class="hint">Tuition, living costs, visa and flights together</span>
-          <div class="budget-out"><span id="bval">60</span><em>lakh PKR</em></div>
-          <input type="range" name="budget_pkr_lakh" id="budget" min="10" max="250" step="5" value="60" aria-describedby="bval">
-          <div class="scale"><span>10 lakh</span><span>1 crore</span><span>2.5 crore</span></div></label>
-        <label class="f">How will you fund it?
+        <legend>Money for year one</legend>
+        <div class="f" style="font-weight:600">Where in the UK?
+          <div class="chips" role="radiogroup" aria-label="Location">
+            <label class="chip"><input type="radio" name="location_pref" value="outside" id="loc-o">Outside London</label>
+            <label class="chip"><input type="radio" name="location_pref" value="london" id="loc-l">London</label>
+            <label class="chip"><input type="radio" name="location_pref" value="any" id="loc-a" checked>Either</label>
+          </div></div>
+        <label class="f">Budget for fees <span class="hint">Tuition, visa, health surcharge and flights. Not living costs: that's the next question.</span>
+          <div class="budget-out"><span id="bval">—</span><em>lakh PKR</em></div>
+          <input type="range" name="budget_pkr_lakh" id="budget" min="10" max="150" step="5" value="60" aria-describedby="bval budget-hint">
+          <div class="scale"><span>10 lakh</span><span>75 lakh</span><span>1.5 crore</span></div>
+          <span class="hint" id="budget-hint">Drag the slider to your amount.</span></label>
+        <label class="f">How will you pay the fees?
           <select name="funding_source" id="fund">
             <option value="">Choose one</option>
             <option value="self_family">Own / family savings</option>
@@ -225,11 +233,12 @@ button:disabled { opacity: .5; cursor: not-allowed; }
             <option value="scholarship_only">Only if I get a full scholarship</option>
             <option value="unsure">Not sure yet</option>
           </select></label>
-        <div class="f" style="font-weight:600">Where in the UK?
-          <div class="chips" role="radiogroup" aria-label="Location">
-            <label class="chip"><input type="radio" name="location_pref" value="outside" id="loc-o">Outside London</label>
-            <label class="chip"><input type="radio" name="location_pref" value="london" id="loc-l">London</label>
-            <label class="chip"><input type="radio" name="location_pref" value="any" id="loc-a" checked>Either</label>
+        <div class="f" style="font-weight:600">Can your family show about <span id="funds-amt">41</span> lakh in a bank account for 28 days?
+          <span class="hint">The UK visa requires this for 9 months of living costs. It stays in your account; it isn't a fee.</span>
+          <div class="chips" role="radiogroup" aria-label="Living funds">
+            <label class="chip"><input type="radio" name="funds_proof" value="yes" id="fp-y">Yes</label>
+            <label class="chip"><input type="radio" name="funds_proof" value="not_sure" id="fp-u">Not sure</label>
+            <label class="chip"><input type="radio" name="funds_proof" value="no" id="fp-n">No</label>
           </div></div>
       </fieldset>
 
@@ -296,15 +305,15 @@ button:disabled { opacity: .5; cursor: not-allowed; }
           <div class="wide"><dt>Student</dt><dd id="p-name">—</dd></div>
           <div><dt>Programme</dt><dd id="p-level">—</dd></div>
           <div><dt>Intake</dt><dd id="p-intake">—</dd></div>
-          <div><dt>Year-one cost</dt><dd id="p-cost">—</dd></div>
-          <div><dt>Your budget</dt><dd id="p-budget">—</dd></div>
+          <div><dt>Fees, year one</dt><dd id="p-cost">—</dd></div>
+          <div><dt>Your fees budget</dt><dd id="p-budget">—</dd></div>
           <div><dt>English</dt><dd id="p-eng">—</dd></div>
           <div><dt>Academic entry</dt><dd id="p-route">—</dd></div>
         </dl>
         <div class="tear"></div>
         <div class="stub"><div class="barcode"></div><small id="p-foot">FILLS IN AS YOU ANSWER</small></div>
       </div>
-      <div class="facts">Costs use UK Student visa rules: £558 visa fee, £776/yr health surcharge, living funds of £1,203/month outside London or £1,570 in London for applications from 30 Nov 2026.</div>
+      <div class="facts">Fees = tuition + £558 visa fee + £776/yr health surcharge + flights. Separately, the visa needs living funds of £1,203/month outside London or £1,570 in London (9 months) held for 28 days for applications from 30 Nov 2026.</div>
     </aside>
   </div>
 </div>
@@ -335,6 +344,8 @@ const steps = [...form.querySelectorAll("fieldset[data-step]")];
 let cur = 0;
 const $ = id => document.getElementById(id);
 steps.forEach(() => $("progress").appendChild(document.createElement("span")));
+let budgetTouched = false;          // the slider has a default position; only count it once moved
+$("budget").addEventListener("input", () => { budgetTouched = true; $("budget-hint").hidden = true; });
 
 // Prefill from links like ?src=whatsapp&phone=923001234567 (works when self-hosted)
 let params; try { params = new URLSearchParams(location.search); } catch { params = new URLSearchParams(); }
@@ -353,7 +364,8 @@ function data() {
   d.english_test = v("english_test") || null;
   const es = parseFloat(v("english_score")); if (!isNaN(es)) d.english_score = es;
   d.english_medium = !!f.get("english_medium");
-  d.budget_pkr_lakh = parseFloat(v("budget_pkr_lakh"));
+  d.budget_pkr_lakh = budgetTouched ? parseFloat(v("budget_pkr_lakh")) : null;
+  d.funds_proof = v("funds_proof") || null;
   d.funding_source = v("funding_source") || null;
   d.location_pref = v("location_pref") || "any";
   d.preferred_intake = v("preferred_intake");
@@ -406,24 +418,27 @@ function route(d) {
   if (s4 == null) return "check";
   return s4 >= 3 ? "direct" : s4 >= 2.5 ? "check" : "pre_masters";
 }
-function costGBP(d, start) {
+// Fees are paid to get there; living funds are only shown in the bank (same split as pipeline/enrich.py).
+function feesGBP(d) {
   if (!d.study_level) return null;
+  return TUITION[d.study_level] + 558 + Math.round(776 * (YEARS[d.study_level] + .5)) + 1200;
+}
+function livingGBP(d, start) {
   const apply = start ? new Date(start - 45 * 864e5) : new Date();
   const newRates = apply >= new Date("2026-11-30T00:00:00");
-  const m = d.location_pref === "london" ? (newRates ? 1570 : 1529) : (newRates ? 1203 : 1171);
-  return TUITION[d.study_level] + m * 9 + 558 + Math.round(776 * (YEARS[d.study_level] + .5)) + 1200;
+  return 9 * (d.location_pref === "london" ? (newRates ? 1570 : 1529) : (newRates ? 1203 : 1171));
 }
+const toLakh = gbp => gbp ? Math.round(gbp * GBP_TO_PKR / 1e4) / 10 : null;
 function evaluate(d) {
   const eng = englishStatus(d);
   const [intake, pushed] = pickIntake(d, eng);
-  const gbp = costGBP(d, intake && intake[1]);
-  const lakh = gbp ? Math.round(gbp * GBP_TO_PKR / 1e4) / 10 : null;
+  const gbp = feesGBP(d), fees = toLakh(gbp), living = toLakh(livingGBP(d, intake && intake[1]));
   const b = d.budget_pkr_lakh;
-  const budget = lakh == null ? "unknown" : b >= lakh ? "sufficient" : b >= .85 * lakh ? "tight" : "short";
-  return { eng, intake: intake && intake[0], pushed, gbp, lakh, budget, route: route(d) };
+  const budget = fees == null || b == null ? "unknown" : b >= fees ? "sufficient" : b >= .85 * fees ? "tight" : "short";
+  return { eng, intake: intake && intake[0], pushed, gbp, fees, living, budget, route: route(d) };
 }
 
-const tone = { sufficient:"good", tight:"warn", short:"bad", meets:"good", waiver_possible:"good", needs_test:"warn", below:"bad", direct:"good", check:"warn", foundation:"warn", pre_masters:"warn" };
+const tone = { yes:"good", not_sure:"warn", no:"bad", sufficient:"good", tight:"warn", short:"bad", meets:"good", waiver_possible:"good", needs_test:"warn", below:"bad", direct:"good", check:"warn", foundation:"warn", pre_masters:"warn" };
 const pill = (txt, key) => tone[key] ? `<span class="pill ${tone[key]}">${txt}</span>` : txt;
 
 function renderPass() {
@@ -436,11 +451,12 @@ function renderPass() {
   $("p-name").textContent = d.name || "—";
   $("p-level").textContent = d.study_level ? LEVEL_NAME[d.study_level] + (d.subject ? " · " + d.subject : "") : "—";
   $("p-intake").textContent = r.intake || "—";
-  $("p-cost").textContent = r.lakh ? `≈ ${r.lakh} lakh` : "—";
-  $("p-budget").innerHTML = cur >= 3 ? pill(`${d.budget_pkr_lakh} lakh`, r.budget) : "—";
+  $("p-cost").textContent = r.fees ? `≈ ${r.fees} lakh` : "—";
+  $("p-budget").innerHTML = d.budget_pkr_lakh != null ? pill(`${d.budget_pkr_lakh} lakh`, r.budget) : "—";
+  $("funds-amt").textContent = Math.round(r.living);
   $("p-eng").innerHTML = d.english_test ? pill(ENG_NAME[r.eng], r.eng) : "—";
   $("p-route").innerHTML = d.highest_qualification ? pill(ROUTE_NAME[r.route], r.route) : "—";
-  $("bval").textContent = d.budget_pkr_lakh;
+  $("bval").textContent = d.budget_pkr_lakh ?? "—";
   $("score-wrap").hidden = !["ielts","ielts_ukvi","pte","toefl","duolingo"].includes($("etest").value);
 }
 
@@ -456,15 +472,39 @@ function show(i) {
 
 function validate(i) {
   const d = data();
-  if (i === 0 && !d.study_level) return "Choose what you want to study.";
-  if (i === 1 && !d.highest_qualification) return "Choose your highest qualification.";
-  if (i === 2 && !d.english_test) return "Tell us about your English test.";
-  if (i === 3 && !d.funding_source) return "Choose how you'll fund your studies.";
-  if (i === 4 && d.has_passport == null) return "Tell us whether you have a passport.";
+  const TESTS = ["ielts", "ielts_ukvi", "pte", "toefl", "duolingo"];
+  const grade = d.cgpa ?? d.grade_percent;
+  if (i === 0) {
+    if (!d.study_level) return "Choose what you want to study.";
+    if (!d.subject) return "Enter the subject you want to study.";
+  }
+  if (i === 1) {
+    if (!d.highest_qualification) return "Choose your highest qualification.";
+    if (grade == null || !((grade >= 1 && grade <= 4) || (grade >= 33 && grade <= 100)))
+      return "Enter your CGPA (out of 4) or your percentage.";
+    if (!d.passing_year || d.passing_year < 1990 || d.passing_year > 2027) return "Enter your passing year, e.g. 2025.";
+  }
+  if (i === 2) {
+    if (!d.english_test) return "Tell us about your English test.";
+    if (TESTS.includes(d.english_test) && !(d.english_score >= 0.5 && d.english_score <= 9))
+      return "Enter your overall score as an IELTS band (0.5–9).";
+  }
+  if (i === 3) {
+    if (d.budget_pkr_lakh == null) return "Drag the slider to set your budget for fees.";
+    if (!d.funding_source) return "Choose how you'll pay the fees.";
+    if (!d.funds_proof) return "Tell us whether your family can show the living funds.";
+  }
+  if (i === 4) {
+    if (!d.preferred_intake) return "Choose when you want to start.";
+    if (d.has_passport == null) return "Tell us whether you have a passport.";
+    if (d.bring_dependants == null) return "Tell us whether a spouse or children would come with you.";
+  }
   if (i === 5) {
     if (!d.name) return "Enter your name.";
     if (!/^(\+?92|0)?3\d{9}$/.test(d.phone.replace(/[\s-]/g, "")) && !/^\+\d{8,15}$/.test(d.phone.replace(/[\s-]/g, "")))
       return "Enter a WhatsApp number like 0300 1234567.";
+    if (!d.city) return "Enter your city.";
+    if (d.email && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(d.email)) return "Check your email address, or leave it empty.";
     if (!d.consent) return "Tick the box so we can send you your plan.";
   }
   return "";
@@ -491,10 +531,14 @@ function renderResult(d, r, sent, server = {}) {
   $("nav").hidden = true; $("progress").hidden = true;
   const first = d.name.split(" ")[0];
   const v = [];
-  const gap = r.lakh != null ? Math.round((d.budget_pkr_lakh - r.lakh) * 10) / 10 : null;
-  v.push([tone[r.budget], r.budget === "sufficient" ? "Your budget covers year one" : r.budget === "tight" ? "Your budget is tight" : "Your budget is short for now",
-    `Estimated year one: about ${r.lakh} lakh PKR (£${r.gbp.toLocaleString("en-GB")}). ` +
-    (gap >= 0 ? `You have about ${gap} lakh spare.` : `You're about ${Math.abs(gap)} lakh short — lower-fee universities, scholarships or instalment plans can close this.`)]);
+  const gap = r.fees != null ? Math.round((d.budget_pkr_lakh - r.fees) * 10) / 10 : null;
+  v.push([tone[r.budget], r.budget === "sufficient" ? "Your budget covers the fees" : r.budget === "tight" ? "Your fees budget is tight" : "Your fees budget is short for now",
+    `Fees for year one: about ${r.fees} lakh PKR (£${r.gbp.toLocaleString("en-GB")}): tuition, visa, health surcharge and flights. ` +
+    (gap >= 0 ? `You have about ${gap} lakh spare.` : `You're about ${Math.abs(gap)} lakh short. Lower-fee universities, scholarships or instalment plans can close this.`)]);
+  v.push([tone[d.funds_proof], { yes: "Living funds: ready", not_sure: "Living funds: to confirm", no: "Living funds: needed for the visa" }[d.funds_proof],
+    `The visa needs about ${r.living} lakh shown in a bank account for 28 days for living costs. ` +
+    { yes: "Keep it there until your visa is decided.", not_sure: "We'll go through what counts (your or your parents' account) on the call.",
+      no: "Without it the visa is refused, so it's worth planning this first." }[d.funds_proof]]);
   v.push([tone[r.route] || "warn", ROUTE_NAME[r.route],
     { direct: "Your grades fit direct entry at many UK universities.", check: "Some universities will take you directly; we can help you shortlist them.",
       foundation: "You'd start with a foundation year, then move into the degree.", pre_masters: "A short pre-master's course gets you into the master's.", unknown: "We'll check your transcripts." }[r.route]]);
@@ -527,7 +571,7 @@ function renderResult(d, r, sent, server = {}) {
   $("result").hidden = false;
   if (book) mountCalendar(server.booking_url);
   $("p-no").textContent = "No. " + Math.random().toString(36).slice(2, 8).toUpperCase();
-  $("p-foot").textContent = r.budget === "sufficient" && r.route === "direct" ? "READY TO APPLY" : "PLAN IN PROGRESS";
+  $("p-foot").textContent = r.budget === "sufficient" && r.route === "direct" && d.funds_proof === "yes" ? "READY TO APPLY" : "PLAN IN PROGRESS";
   renderPass();
   $("result").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }

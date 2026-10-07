@@ -33,6 +33,7 @@ TEST_NAME = {"ielts": "IELTS", "ielts_ukvi": "IELTS UKVI", "pte": "PTE", "toefl"
              "duolingo": "Duolingo", "oxford_elllt": "Oxford ELLT", "planned": "test planned", "none": "no test"}
 FUNDING_NAME = {"self_family": "own/family", "loan": "bank loan", "sponsor": "sponsor",
                 "scholarship_only": "scholarship only", "unsure": "not sure"}
+FUNDS_NAME = {"yes": "family can show it", "not_sure": "not sure yet", "no": "can't show it"}
 ROUTE_NAME = {"direct": "direct entry", "check": "depends on university", "foundation": "foundation first",
               "pre_masters": "pre-master's first", "unknown": "unknown"}
 
@@ -95,6 +96,7 @@ def call_eligible(lead: Lead) -> bool:
     return bool(
         lead.consent and lead.phone_e164 and lead.stage in _OPEN_STAGES
         and lead.budget_status in f["budget_status"]
+        and lead.funds_proof in f["funds_proof"]
         and lead.academic_route in f["academic_route"]
         and lead.months_to_intake is not None and lead.months_to_intake <= f["max_months_to_intake"]
     )
@@ -236,8 +238,11 @@ def brief(lead: Lead) -> str:
         + (f" ({lead.passing_year})" if lead.passing_year else "")
         + f" → {ROUTE_NAME.get(lead.academic_route, lead.academic_route)}",
         f"English: {eng} → {lead.english_status.replace('_', ' ')}",
-        f"Money: budget {num(lead.budget_pkr_lakh)} lakh vs ~{num(lead.est_first_year_cost_pkr_lakh)} lakh "
-        f"needed → {lead.budget_status} · funding: {FUNDING_NAME.get(lead.funding_source or '', '?')}",
+        f"Fees: budget {num(lead.budget_pkr_lakh)} lakh vs ~{num(lead.est_fees_pkr_lakh)} lakh "
+        f"(tuition + visa + IHS + flights) → {lead.budget_status} · funding: "
+        f"{FUNDING_NAME.get(lead.funding_source or '', '?')}",
+        f"Living funds to show for 28 days: ~{num(lead.est_living_funds_pkr_lakh)} lakh → "
+        f"{FUNDS_NAME.get(lead.funds_proof or '', 'not asked')}",
         f"Decision maker: {lead.decision_maker or '?'} · passport: {yn(lead.has_passport)} · "
         f"prior UK refusal: {yn(lead.previous_uk_refusal)} · dependants: {yn(lead.bring_dependants)}",
     ]

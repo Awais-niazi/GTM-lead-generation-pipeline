@@ -50,7 +50,8 @@ async def quiz(request: Request, x_quiz_key: str | None = Header(default=None)):
     # Return only what the student should see (no internal score).
     url = workflow.booking_url(lead) if lead.call_eligible else ""
     return {"ok": True, "recommended_intake": lead.recommended_intake,
-            "est_cost_pkr_lakh": lead.est_first_year_cost_pkr_lakh,
+            "est_fees_pkr_lakh": lead.est_fees_pkr_lakh,
+            "est_living_funds_pkr_lakh": lead.est_living_funds_pkr_lakh,
             "budget_status": lead.budget_status, "english_status": lead.english_status,
             "academic_route": lead.academic_route, "book_call": bool(url), "booking_url": url}
 

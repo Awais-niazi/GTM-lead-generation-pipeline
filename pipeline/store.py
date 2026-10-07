@@ -19,7 +19,7 @@ from .models import Lead, now_iso
 RAW_FIELDS = [
     "name", "phone", "email", "city", "study_level", "subject", "highest_qualification",
     "grade_percent", "cgpa", "passing_year", "english_test", "english_score", "english_medium",
-    "budget_pkr_lakh", "funding_source", "preferred_intake", "location_pref", "has_passport",
+    "budget_pkr_lakh", "funds_proof", "funding_source", "preferred_intake", "location_pref", "has_passport",
     "previous_uk_refusal", "bring_dependants", "utm_source", "utm_campaign",
 ]
 

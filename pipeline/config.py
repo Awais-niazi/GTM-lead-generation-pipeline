@@ -134,6 +134,7 @@ TIER_THRESHOLDS = {"Hot": 70, "Warm": 50, "Nurture": 30}  # below Nurture → Co
 # Who gets offered a qualification call on the quiz result page. Your time is the cost.
 CALL_FILTER = {
     "budget_status": {"sufficient", "tight"},
+    "funds_proof": {"yes", "not_sure", None},   # "no" = can't show living funds = visa refused
     "academic_route": {"direct", "check", "foundation", "pre_masters"},
     "max_months_to_intake": 12,
 }

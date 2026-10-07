@@ -19,7 +19,7 @@ _CITY_ALIASES = {
 
 KEY_FIELDS = [
     "name", "phone", "city", "study_level", "highest_qualification", "passing_year",
-    "english_test", "budget_pkr_lakh", "funding_source", "preferred_intake", "has_passport",
+    "english_test", "budget_pkr_lakh", "funds_proof", "funding_source", "preferred_intake", "has_passport",
 ]
 
 
@@ -172,16 +172,27 @@ def english_status(lead: Lead) -> str:
 
 
 # --------------------------------------------------------------------------- money
-def first_year_cost_gbp(lead: Lead, intake_start: date | None) -> int | None:
+def fees_gbp(lead: Lead) -> int | None:
+    """What the student pays to get there: first-year tuition + visa + health surcharge + flights."""
     lvl = lead.study_level
     if not lvl:
+        return None
+    ihs = round(C.IHS_PER_YEAR_GBP * (C.VISA_YEARS[lvl] + 0.5))
+    return C.TUITION_FLOOR_GBP[lvl] + C.VISA_FEE_GBP + ihs + C.FLIGHT_AND_SETUP_GBP
+
+
+def living_funds_gbp(lead: Lead, intake_start: date | None) -> int | None:
+    """Maintenance the visa requires in the bank for 28 days (9 months, London or outside)."""
+    if not lead.study_level:
         return None
     # Visa usually lodged 4–8 weeks before start; 45 days errs toward the newer (higher) rate.
     apply_on = (intake_start - timedelta(days=45)) if intake_start else date.today()
     loc = "london" if lead.location_pref == "london" else "outside"
-    maint = C.maintenance_monthly(loc, apply_on) * 9
-    ihs = round(C.IHS_PER_YEAR_GBP * (C.VISA_YEARS[lvl] + 0.5))
-    return C.TUITION_FLOOR_GBP[lvl] + maint + C.VISA_FEE_GBP + ihs + C.FLIGHT_AND_SETUP_GBP
+    return C.maintenance_monthly(loc, apply_on) * 9
+
+
+def lakh(gbp: int | None) -> float | None:
+    return round(gbp * C.GBP_TO_PKR / 100_000, 1) if gbp else None
 
 
 def budget_status(budget_lakh: float | None, cost_lakh: float | None) -> str:
@@ -236,13 +247,18 @@ def enrich(lead: Lead, today: date | None = None) -> Lead:
         flags.append(f"{lead.study_gap_years}-year study gap — needs a documented explanation")
 
     # Money
-    cost = first_year_cost_gbp(lead, intake_start)
-    lead.est_first_year_cost_gbp = cost
-    if cost:
-        lead.est_first_year_cost_pkr_lakh = round(cost * C.GBP_TO_PKR / 100_000, 1)
-    lead.budget_status = budget_status(lead.budget_pkr_lakh, lead.est_first_year_cost_pkr_lakh)
-    if lead.budget_pkr_lakh is not None and lead.est_first_year_cost_pkr_lakh:
-        lead.budget_gap_pkr_lakh = round(lead.budget_pkr_lakh - lead.est_first_year_cost_pkr_lakh, 1)
+    # The budget covers fees; living costs are shown in the bank separately (funds_proof).
+    lead.est_fees_gbp = fees_gbp(lead)
+    lead.est_fees_pkr_lakh = lakh(lead.est_fees_gbp)
+    lead.est_living_funds_pkr_lakh = lakh(living_funds_gbp(lead, intake_start))
+    lead.budget_status = budget_status(lead.budget_pkr_lakh, lead.est_fees_pkr_lakh)
+    if lead.budget_pkr_lakh is not None and lead.est_fees_pkr_lakh:
+        lead.budget_gap_pkr_lakh = round(lead.budget_pkr_lakh - lead.est_fees_pkr_lakh, 1)
+    funds = f"~{lead.est_living_funds_pkr_lakh:g} lakh for 28 days" if lead.est_living_funds_pkr_lakh else "living funds"
+    if lead.funds_proof == "no":
+        flags.append(f"Can't show living funds ({funds}) — visa would be refused as things stand")
+    elif lead.funds_proof == "not_sure":
+        flags.append(f"Not sure about living funds ({funds}) — confirm on the call")
     if lead.funding_source == "scholarship_only":
         flags.append("Depends on full scholarship — rare for UK taught courses")
     if lead.study_level == "ug":

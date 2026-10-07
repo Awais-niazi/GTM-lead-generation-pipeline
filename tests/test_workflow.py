@@ -148,7 +148,7 @@ def test_cooked_ships_once_and_only_with_handoff_consent():
     [logged] = store.deliveries()
     assert "Decision maker: Parent" in logged["brief"] and "Father paying" in logged["brief"]
     [row] = delivery_rows()
-    assert row["lead_id"] == lead.lead_id and "Money: budget 165" in row["brief"]
+    assert row["lead_id"] == lead.lead_id and "Fees: budget 165" in row["brief"]
 
     assert workflow.sync(TODAY) == []                # nothing changed → nothing re-shipped
     assert len(store.deliveries()) == 1 and len(delivery_rows()) == 1
@@ -233,3 +233,16 @@ def test_real_calcom_payload_shape():
     assert lead.name == "Hina Shah" and lead.phone_e164 == "+923211234567"
     assert lead.email == "" and lead.consent
     assert lead.call_at == "2026-10-07T12:30+05:00"
+
+
+def test_living_funds_are_separate_from_the_fees_budget():
+    ok = process(hot_quiz(budget_pkr_lakh=60, funds_proof="yes"), today=TODAY, notify=False)
+    assert ok.budget_status == "tight" and ok.call_eligible            # 60 lakh covers ~67 lakh fees at 85%+
+    assert "Living funds to show for 28 days: ~40.6 lakh → family can show it" in workflow.brief(ok)
+
+    unsure = process(hot_quiz(phone="03111111112", funds_proof="not_sure"), today=TODAY, notify=False)
+    assert unsure.call_eligible and any("Not sure about living funds" in f for f in unsure.flags)
+
+    no = process(hot_quiz(phone="03111111113", funds_proof="no"), today=TODAY, notify=False)
+    assert not no.call_eligible and no.score <= 55 and no.tier != "Hot"
+    assert any("visa would be refused" in f for f in no.flags)

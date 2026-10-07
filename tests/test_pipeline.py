@@ -46,8 +46,9 @@ def test_hot_lead():
     assert lead.academic_route == "direct" and lead.english_status == "meets"
     assert lead.budget_status == "sufficient"
     assert lead.recommended_intake == "Jan 2027"
-    # Jan 2027 visa applications fall after 30 Nov 2026 → new £1,203 rate
-    assert lead.est_first_year_cost_gbp == 15000 + 1203 * 9 + 558 + round(776 * 1.5) + 1200
+    # Fees exclude living costs; those are shown in the bank. Jan 2027 visas use the new £1,203 rate.
+    assert lead.est_fees_gbp == 15000 + 558 + round(776 * 1.5) + 1200
+    assert lead.est_living_funds_pkr_lakh == round(1203 * 9 * C.GBP_TO_PKR / 100_000, 1)
 
 
 def test_budget_short_caps_tier():

@@ -15,6 +15,7 @@ Qualification = Literal[
 EnglishTest = Literal["none", "planned", "ielts", "ielts_ukvi", "pte", "toefl", "duolingo", "oxford_elllt"]
 Funding = Literal["self_family", "loan", "sponsor", "scholarship_only", "unsure"]
 Location = Literal["london", "outside", "any"]
+FundsProof = Literal["yes", "not_sure", "no"]
 Source = Literal["web_quiz", "whatsapp", "meta_lead_ad", "import", "booking"]
 
 
@@ -51,7 +52,8 @@ class Lead(BaseModel):
     english_test: Optional[EnglishTest] = None
     english_score: Optional[float] = None    # IELTS-equivalent overall
     english_medium: Optional[bool] = None    # studied in English medium (waiver signal)
-    budget_pkr_lakh: Optional[float] = None  # total first-year budget, PKR lakh
+    budget_pkr_lakh: Optional[float] = None  # budget for fees: tuition + visa + IHS + flights, PKR lakh
+    funds_proof: Optional[FundsProof] = None # can the family show the living funds for 28 days?
     funding_source: Optional[Funding] = None
     preferred_intake: str = ""               # "Jan 2027", "Sep 2027", "not sure"
     location_pref: Location = "any"
@@ -69,8 +71,9 @@ class Lead(BaseModel):
     city_tier: Optional[int] = None
     province: str = ""
     study_gap_years: Optional[int] = None
-    est_first_year_cost_gbp: Optional[int] = None
-    est_first_year_cost_pkr_lakh: Optional[float] = None
+    est_fees_gbp: Optional[int] = None               # paid to get there: tuition + visa + IHS + flights
+    est_fees_pkr_lakh: Optional[float] = None
+    est_living_funds_pkr_lakh: Optional[float] = None  # shown in the bank for 28 days (UKVI maintenance)
     budget_gap_pkr_lakh: Optional[float] = None
     budget_status: str = ""                  # sufficient / tight / short / unknown
     academic_route: str = ""                 # direct / foundation / pre_masters / check / unknown
@@ -123,7 +126,8 @@ SHEET_COLUMNS = [
     "study_level", "subject", "highest_qualification", "grade_percent", "cgpa", "passing_year",
     "study_gap_years", "academic_route",
     "english_test", "english_score", "english_status",
-    "budget_pkr_lakh", "est_first_year_cost_pkr_lakh", "budget_gap_pkr_lakh", "budget_status",
+    "budget_pkr_lakh", "est_fees_pkr_lakh", "budget_gap_pkr_lakh", "budget_status",
+    "est_living_funds_pkr_lakh", "funds_proof",
     "funding_source", "preferred_intake", "recommended_intake", "months_to_intake",
     "location_pref", "has_passport", "previous_uk_refusal", "bring_dependants",
     "graduate_route_months", "flags", "score_breakdown", "completeness", "call_eligible",

@@ -255,8 +255,8 @@ def alert_hot(lead: Lead) -> None:
     notify(C.ALERT_WHATSAPP,
            f"🔥 HOT UK lead ({lead.score}/100)\n{lead.name or 'Unknown'} · {lead.city_normalized.title()}\n"
            f"{lead.study_level} {lead.subject} · {lead.recommended_intake}\n"
-           f"Budget {lead.budget_pkr_lakh} lakh vs need ~{lead.est_first_year_cost_pkr_lakh} lakh "
-           f"({lead.budget_status}) · English: {lead.english_status}\n"
+           f"Fees budget {lead.budget_pkr_lakh} lakh vs ~{lead.est_fees_pkr_lakh} lakh ({lead.budget_status}) · "
+           f"living funds: {lead.funds_proof or '?'} · English: {lead.english_status}\n"
            f"{lead.whatsapp_link}\nNext: {lead.next_action}")
 
 
