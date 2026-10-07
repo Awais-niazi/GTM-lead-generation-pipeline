@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote, urlencode
+from zoneinfo import ZoneInfo
 
 from . import config as C
 from . import sinks, store
@@ -61,6 +62,28 @@ def parse_date(s: str) -> date | None:
     return None
 
 
+def _tz():
+    try:
+        return ZoneInfo(C.TIMEZONE)
+    except Exception:                                # no tz database: Pakistan has no DST
+        return timezone(timedelta(hours=5))
+
+
+def local_iso(utc: str) -> str:
+    """Cal.com sends UTC; store call times in local time so the sheet reads naturally."""
+    try:
+        return datetime.fromisoformat(utc.replace("Z", "+00:00")).astimezone(_tz()).isoformat(timespec="minutes")
+    except ValueError:
+        return utc
+
+
+def fmt_local(iso: str) -> str:
+    try:
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(_tz()).strftime("%a %d %b, %H:%M")
+    except ValueError:
+        return iso or "time TBC"
+
+
 def is_stop(text: str) -> bool:
     return re.sub(r"[^a-z ]", "", (text or "").lower()).strip() in STOP_WORDS
 
@@ -106,9 +129,10 @@ def next_step(lead: Lead) -> str:
             return "Offered a call · WhatsApp a nudge if no booking within 48h"
         return lead.next_action                      # score-based nurture advice
     if s == "Call booked":
-        when = lead.call_at.replace("T", " ")[:16] if lead.call_at else "time TBC"
+        when = fmt_local(lead.call_at) if lead.call_at else "time TBC"
+        skipped = "" if lead.consent else " · they skipped the quiz: send the quiz link first (records consent + answers)"
         return (f"Qualification call {when}: who pays + 28-day funds, passport, any refusals, "
-                f"firm intake, decision maker, handoff consent")
+                f"firm intake, decision maker, handoff consent{skipped}")
     if s == "No-show":
         return "Rebook, or qualify over WhatsApp chat"
     if s == "Not yet":
@@ -318,11 +342,13 @@ def opt_out(phone: str, today: date | None = None) -> Lead | None:
 
 
 def _answer(p: dict, *keys: str) -> str:
+    """A booking-form answer. Values arrive as plain strings or {"value": ...}; a phone-call
+    location arrives as {"value": "phone", "optionValue": "+92..."}."""
     responses = p.get("responses") or {}
     for k in keys:
         v = responses.get(k)
         if isinstance(v, dict):
-            v = v.get("value")
+            v = v.get("optionValue") or v.get("value")
         if isinstance(v, dict):                      # name can be {firstName, lastName}
             v = " ".join(str(x) for x in v.values() if x)
         if v:
@@ -330,57 +356,88 @@ def _answer(p: dict, *keys: str) -> str:
     return ""
 
 
+def _booking_phone(p: dict) -> str:
+    return normalize_phone(_answer(p, "attendeePhoneNumber", "phone", "location"))
+
+
 def _find_booking_lead(p: dict) -> Lead | None:
     lid = (p.get("metadata") or {}).get("lead_id")
-    if lid and (lead := store.get(lid)):
+    if lid and (lead := store.get(str(lid))):
         return lead
-    attendee = (p.get("attendees") or [{}])[0]
-    phone = normalize_phone(_answer(p, "attendeePhoneNumber", "phone") or attendee.get("phoneNumber") or "")
-    if phone and (lead := store.get(Lead(phone_e164=phone).compute_id())):
+    refs = {r for r in (p.get("uid"), p.get("rescheduleUid"), p.get("bookingUid")) if r}
+    leads = store.all_leads()
+    if refs and (lead := next((l for l in leads if l.booking_ref in refs), None)):
         return lead
-    email = (_answer(p, "email") or attendee.get("email") or "").strip().lower()
-    if email:
-        return next((l for l in store.all_leads() if l.email.strip().lower() == email), None)
-    return None
+    if (phone := _booking_phone(p)) and (lead := store.get(Lead(phone_e164=phone).compute_id())):
+        return lead
+    emails = {(a.get("email") or "").strip().lower() for a in p.get("attendees") or []}
+    emails |= {_answer(p, "email").strip().lower()}
+    emails.discard("")
+    return next((l for l in leads if l.email.strip().lower() in emails), None) if emails else None
+
+
+BOOKED = {"BOOKING_CREATED", "BOOKING_REQUESTED", "BOOKING_RESCHEDULED"}
+UNBOOKED = {"BOOKING_CANCELLED", "BOOKING_REJECTED"}
 
 
 def handle_booking(event: dict, today: date | None = None) -> Lead | None:
-    """Cal.com webhook: BOOKING_CREATED / BOOKING_RESCHEDULED / BOOKING_CANCELLED."""
+    """Cal.com webhook. Created / requested / rescheduled → Call booked; cancelled / rejected →
+    back to New; no-show marked in Cal.com → No-show. Everything else (PING, ...) is ignored."""
     trigger = event.get("triggerEvent", "")
     p = event.get("payload") or {}
-    if trigger not in ("BOOKING_CREATED", "BOOKING_RESCHEDULED", "BOOKING_CANCELLED"):
+    if trigger not in BOOKED | UNBOOKED | {"BOOKING_NO_SHOW_UPDATED"}:
         return None
     lead = _find_booking_lead(p)
     if lead is None:
-        if trigger != "BOOKING_CREATED":
+        if trigger not in ("BOOKING_CREATED", "BOOKING_REQUESTED"):
+            log.warning("Cal.com %s for an unknown booking %s", trigger, p.get("uid") or p.get("bookingUid"))
             return None
         from .process import process                # someone booked without taking the quiz
         attendee = (p.get("attendees") or [{}])[0]
         lead = process(Lead(source="booking", source_ref=p.get("uid", ""),
                             name=_answer(p, "name") or attendee.get("name", ""),
                             email=_answer(p, "email") or attendee.get("email", ""),
-                            phone=_answer(p, "attendeePhoneNumber", "phone") or attendee.get("phoneNumber", "")),
+                            phone=_booking_phone(p)),
                        event, today, notify=False)
         if not lead.lead_id:
             return None
     else:
         pull(lead, today)
 
-    if trigger == "BOOKING_CANCELLED":
+    if not lead.consent and norm_bool(_answer(p, "consent")):
+        # Cal.com booking question (checkbox, identifier "consent") — same wording as the quiz
+        lead.consent, lead.consent_at = True, now_iso()
+        lead.consent_text = "Ticked consent checkbox on the Cal.com booking form"
+
+    duplicate = False
+    if trigger in BOOKED:
+        call_at = local_iso(p.get("startTime", ""))
+        duplicate = lead.stage == "Call booked" and lead.booking_ref == p.get("uid") and lead.call_at == call_at
+        lead.call_at, lead.booking_ref = call_at, p.get("uid", "") or lead.booking_ref
+        if lead.stage in _OPEN_STAGES | {"Call booked"}:
+            set_stage(lead, "Call booked", today)
+    elif trigger in UNBOOKED:
         if lead.stage != "Call booked":
             return lead
         lead.stage, lead.call_at = "New", ""
-    else:
-        lead.call_at, lead.booking_ref = p.get("startTime", ""), p.get("uid", "")
-        if lead.stage in _OPEN_STAGES | {"Call booked"}:
-            set_stage(lead, "Call booked", today)
+    else:                                            # BOOKING_NO_SHOW_UPDATED
+        marked = [a.get("noShow") for a in p.get("attendees") or []]
+        if any(marked) and lead.stage == "Call booked":
+            set_stage(lead, "No-show", today)
+        elif marked and not any(marked) and lead.stage == "No-show":
+            lead.stage = "Call booked"               # unmarked by mistake
+        else:
+            return lead
+    if duplicate:                                    # Cal.com retried a delivery
+        return lead
     refresh(lead)
     lead.updated_at = now_iso()
     store.save(lead, event)
     sinks.write(lead)
-    if trigger == "BOOKING_CREATED":
+    if trigger in BOOKED:
+        verb = "rescheduled" if trigger == "BOOKING_RESCHEDULED" else "booked"
         sinks.notify(C.ALERT_WHATSAPP,
-                     f"📅 Call booked: {lead.name or 'Unknown'} · {lead.call_at.replace('T', ' ')[:16]}\n"
+                     f"📅 Call {verb}: {lead.name or 'Unknown'} · {fmt_local(lead.call_at)}\n"
                      f"{lead.tier} {lead.score}/100 · {lead.study_level} {lead.subject} · "
                      f"{lead.recommended_intake}\n{lead.whatsapp_link}")
     return lead

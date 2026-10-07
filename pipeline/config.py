@@ -22,6 +22,7 @@ QUIZ_URL = os.getenv("QUIZ_URL", "https://example.com/uk-eligibility")
 # Cal.com event link for the qualification call, and its webhook signing secret
 BOOKING_URL = os.getenv("BOOKING_URL", "")
 CALCOM_WEBHOOK_SECRET = os.getenv("CALCOM_WEBHOOK_SECRET", "")
+TIMEZONE = os.getenv("TIMEZONE", "Asia/Karachi")     # how call times are shown to you
 
 # Google Sheets
 GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json")

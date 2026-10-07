@@ -85,14 +85,41 @@ UTM tags (`?utm_source=fb&utm_campaign=jan27`) are captured automatically.
 Students see their result instantly; that instant answer is why they give you a real number.
 
 ### 4. Cal.com (qualification call)
-1. Create a 10-minute event, set its location to WhatsApp / phone, and require a phone number.
-   Put the event link in `BOOKING_URL`.
-2. Settings → Developer → Webhooks: URL `https://your-host/webhook/booking`, triggers
-   *Booking created*, *Booking rescheduled* and *Booking cancelled*, and a secret → `CALCOM_WEBHOOK_SECRET`.
-3. Turn on Cal.com's reminder workflow (day before + 1 hour before); no-shows are common.
+The free plan is enough (webhooks included).
 
-The booking link carries the lead id, so a booking moves that lead to **Call booked**
-and WhatsApps you (`ALERT_WHATSAPP`).
+**Event type** (e.g. "UK plan check — 10 min", slug `uk-call`):
+1. **Location:** *Attendee phone number*. You WhatsApp-call the number they give.
+2. **Booking questions:** turn on **Phone number** (`attendeePhoneNumber`) and make it required.
+   Optionally add a required **Checkbox** with identifier `consent` and the same wording as the
+   quiz checkbox, so people who book from a shared link (skipping the quiz) are covered too.
+3. **Limits:** minimum notice ~4 hours, a 10-minute buffer, and a daily cap you can keep up with.
+4. **Reminders:** if your plan includes Workflows, add reminders 24 hours and 1 hour before. If not, send a WhatsApp reminder yourself from the `call_at` column.
+5. Put the event link in `BOOKING_URL`, e.g. `https://cal.com/yourbrand/uk-call`.
+
+The quiz prefills name, email and phone, and passes `metadata[lead_id]`, so the booking is
+tied to the right lead.
+
+**Webhook** (Settings → Developer → Webhooks → New):
+- Subscriber URL: `https://your-host/webhook/booking`
+- Triggers: *Booking created*, *Booking requested*, *Booking rescheduled*,
+  *Booking cancelled*, *Booking rejected*, *Booking no-show updated*
+- Secret: a long random string → `CALCOM_WEBHOOK_SECRET` (checked against `X-Cal-Signature-256`)
+- Leave **custom payload template empty**; the pipeline expects Cal.com's default payload.
+
+| Cal.com event | Lead |
+|---|---|
+| Created / requested | → **Call booked**, call time saved in PKT (`TIMEZONE`), WhatsApp alert to you |
+| Rescheduled | new time and booking id, alert to you |
+| Cancelled / rejected | back to **New** (the booking link is offered again) |
+| No-show marked in Cal.com | → **No-show** (unmarking puts it back) |
+
+To test before you have hosting, run the app locally and open a temporary HTTPS tunnel:
+```bash
+uvicorn app:app --port 8000
+cloudflared tunnel --url http://localhost:8000     # prints https://<random>.trycloudflare.com
+```
+Use that URL as the subscriber URL, press **Ping test** (expect `{"ok":true,"matched":false}`),
+then take the quiz and book a slot. The lead's `stage` should change to *Call booked*.
 
 ### 5. Daily routine
 

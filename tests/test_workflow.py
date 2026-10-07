@@ -73,8 +73,63 @@ def test_booking_webhook_moves_lead_to_call_booked(monkeypatch):
     r = c.post("/webhook/booking", content=body, headers={"X-Cal-Signature-256": sig})
     assert r.json() == {"ok": True, "matched": True}
     got = store.get(lead.lead_id)
-    assert got.stage == "Call booked" and got.call_at == "2026-10-09T10:00:00Z"
-    assert "Qualification call 2026-10-09 10:00" in got.next_action
+    assert got.stage == "Call booked" and got.call_at == "2026-10-09T15:00+05:00"   # shown in PKT
+    assert "Qualification call Fri 09 Oct, 15:00" in got.next_action
+    assert c.post("/webhook/booking", content=b'{"triggerEvent":"PING","payload":{}}',
+                  headers={"X-Cal-Signature-256": hmac.new(b"s3cret", b'{"triggerEvent":"PING","payload":{}}',
+                                                           hashlib.sha256).hexdigest()}).json()["matched"] is False
+
+
+def booking_event(trigger, **payload):
+    return {"triggerEvent": trigger, "createdAt": "2026-10-07T09:00:00Z", "payload": payload}
+
+
+def test_reschedule_noshow_and_cancel_follow_the_booking(monkeypatch):
+    sent = []
+    monkeypatch.setattr(workflow.sinks, "notify", lambda numbers, body: sent.append(body))
+    lead = process(hot_quiz(), today=TODAY, notify=False)
+    created = booking_event("BOOKING_CREATED", uid="bk1", startTime="2026-10-09T10:00:00Z",
+                            metadata={"lead_id": lead.lead_id})
+    workflow.handle_booking(created, TODAY)
+    workflow.handle_booking(created, TODAY)          # Cal.com retry: no second alert
+    assert len(sent) == 1 and "Call booked" in sent[0]
+
+    # Reschedule: new uid, old one in rescheduleUid, no metadata to rely on
+    workflow.handle_booking(booking_event("BOOKING_RESCHEDULED", uid="bk2", rescheduleUid="bk1",
+                                          startTime="2026-10-10T06:30:00Z"), TODAY)
+    got = store.get(lead.lead_id)
+    assert got.booking_ref == "bk2" and got.call_at == "2026-10-10T11:30+05:00" and "rescheduled" in sent[-1]
+
+    # No-show marked in Cal.com carries only bookingUid + attendee emails
+    noshow = booking_event("BOOKING_NO_SHOW_UPDATED", bookingUid="bk2",
+                           attendees=[{"email": "ayesha@gmail.com", "noShow": True}])
+    workflow.handle_booking(noshow, TODAY)
+    assert store.get(lead.lead_id).stage == "No-show"
+    noshow["payload"]["attendees"][0]["noShow"] = False          # unmarked by mistake
+    workflow.handle_booking(noshow, TODAY)
+    assert store.get(lead.lead_id).stage == "Call booked"
+
+    workflow.handle_booking(booking_event("BOOKING_CANCELLED", uid="bk2"), TODAY)
+    got = store.get(lead.lead_id)
+    assert got.stage == "New" and got.call_at == "" and got.call_eligible
+
+
+def test_booking_without_quiz_creates_lead_from_phone_location():
+    lead = workflow.handle_booking(booking_event(
+        "BOOKING_CREATED", uid="bk9", startTime="2026-10-09T10:00:00Z",
+        responses={"name": {"value": "Bilal Ahmed"}, "email": {"value": "bilal@yahoo.com"},
+                   "location": {"value": "phone", "optionValue": "+92 333 1234567"}},
+        attendees=[{"name": "Bilal Ahmed", "email": "bilal@yahoo.com", "timeZone": "Asia/Karachi"}]), TODAY)
+    assert lead.source == "booking" and lead.phone_e164 == "+923331234567"
+    assert lead.stage == "Call booked" and not lead.consent   # booked, but no quiz consent yet
+    assert "skipped the quiz" in lead.next_action
+
+
+def test_booking_form_consent_checkbox_is_recorded():
+    lead = workflow.handle_booking(booking_event(
+        "BOOKING_CREATED", uid="bk8", startTime="2026-10-09T10:00:00Z",
+        responses={"name": "Sara", "attendeePhoneNumber": "+923451234567", "consent": True}), TODAY)
+    assert lead.consent and "Cal.com" in lead.consent_text
 
 
 def test_cooked_ships_once_and_only_with_handoff_consent():
