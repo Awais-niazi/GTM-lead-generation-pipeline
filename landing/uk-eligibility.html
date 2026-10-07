@@ -336,7 +336,7 @@ const INTAKES = [["Jan 2027","2027-01-15"],["May 2027","2027-05-10"],["Sep 2027"
   .map(([l, d]) => [l, new Date(d + "T00:00:00")]);
 const CODES = { lahore:"LHE", karachi:"KHI", islamabad:"ISB", rawalpindi:"ISB", peshawar:"PEW", multan:"MUX", faisalabad:"LYP", quetta:"UET", sialkot:"SKT", sukkur:"SKZ", gujranwala:"LHE", hyderabad:"KHI" };
 const LEVEL_NAME = { foundation:"Foundation", ug:"Bachelor's", pg_taught:"Master's", mba:"MBA", phd:"PhD" };
-const ROUTE_NAME = { direct:"Direct entry", check:"Depends on university", foundation:"Foundation first", pre_masters:"Pre-master's first", unknown:"—" };
+const ROUTE_NAME = { direct:"Direct entry", check:"Depends on university", foundation:"Foundation first", pre_masters:"Pre-master's first", redirect_ug:"Bachelor's first", unknown:"—" };
 const ENG_NAME = { meets:"Meets requirement", below:"Below requirement", waiver_possible:"Waiver possible", needs_test:"Test needed", unknown:"—" };
 
 const form = document.getElementById("quiz");
@@ -412,7 +412,7 @@ function route(d) {
     return p >= 70 ? "direct" : p >= 55 ? "check" : "foundation";
   }
   if (l === "phd") return (q === "masters" || q === "mphil") ? "direct" : "check";
-  if (school.includes(q)) return "foundation";
+  if (school.includes(q)) return "redirect_ug";     // master's/MBA without a bachelor's
   if (q === "bachelors_14") return (p != null && p < 50) ? "pre_masters" : "check";
   const s4 = c != null ? c : p != null ? p / 25 : null;
   if (s4 == null) return "check";
@@ -421,7 +421,8 @@ function route(d) {
 // Fees are paid to get there; living funds are only shown in the bank (same split as pipeline/enrich.py).
 function feesGBP(d) {
   if (!d.study_level) return null;
-  return TUITION[d.study_level] + 558 + Math.round(776 * (YEARS[d.study_level] + .5)) + 1200;
+  const lvl = route(d) === "redirect_ug" ? "ug" : d.study_level;   // quote what they can actually do
+  return TUITION[lvl] + 558 + Math.round(776 * (YEARS[lvl] + .5)) + 1200;
 }
 function livingGBP(d, start) {
   const apply = start ? new Date(start - 45 * 864e5) : new Date();
@@ -438,7 +439,7 @@ function evaluate(d) {
   return { eng, intake: intake && intake[0], pushed, gbp, fees, living, budget, route: route(d) };
 }
 
-const tone = { yes:"good", not_sure:"warn", no:"bad", sufficient:"good", tight:"warn", short:"bad", meets:"good", waiver_possible:"good", needs_test:"warn", below:"bad", direct:"good", check:"warn", foundation:"warn", pre_masters:"warn" };
+const tone = { yes:"good", not_sure:"warn", no:"bad", sufficient:"good", tight:"warn", short:"bad", meets:"good", waiver_possible:"good", needs_test:"warn", below:"bad", direct:"good", check:"warn", foundation:"warn", pre_masters:"warn", redirect_ug:"bad" };
 const pill = (txt, key) => tone[key] ? `<span class="pill ${tone[key]}">${txt}</span>` : txt;
 
 function renderPass() {
@@ -541,7 +542,9 @@ function renderResult(d, r, sent, server = {}) {
       no: "Without it the visa is refused, so it's worth planning this first." }[d.funds_proof]]);
   v.push([tone[r.route] || "warn", ROUTE_NAME[r.route],
     { direct: "Your grades fit direct entry at many UK universities.", check: "Some universities will take you directly; we can help you shortlist them.",
-      foundation: "You'd start with a foundation year, then move into the degree.", pre_masters: "A short pre-master's course gets you into the master's.", unknown: "We'll check your transcripts." }[r.route]]);
+      foundation: "You'd start with a foundation year, then move into the degree.", pre_masters: "A short pre-master's course gets you into the master's.",
+      redirect_ug: "A UK master's or MBA needs a bachelor's degree first. With your qualification, the route is a foundation year or a bachelor's, and the fees above are for that.",
+      unknown: "We'll check your transcripts." }[r.route]]);
   v.push([tone[r.eng] || "warn", "English: " + ENG_NAME[r.eng],
     { meets: "Your score meets the usual requirement.", below: `Most ${LEVEL_NAME[d.study_level]} courses ask for about IELTS ${IELTS[d.study_level]}.`,
       waiver_possible: "Many UK universities accept English-medium study instead of IELTS for degree courses.", needs_test: "Book IELTS UKVI or PTE; we can help you plan.", unknown: "We'll confirm with you." }[r.eng]]);

@@ -120,7 +120,8 @@ def academic_route(lead: Lead) -> tuple[str, list[str]]:
 
     if lvl in ("pg_taught", "mba"):
         if q in ("matric", "o_levels", "fsc_hssc", "a_levels", "dae"):
-            return "foundation", ["Wants PG but has no bachelor's — redirect to UG"]
+            # Not "foundation": they can't do what they asked for. Fees are re-quoted for a UG degree.
+            return "redirect_ug", ["Wants PG but has no bachelor's — needs a bachelor's (foundation/UG) first"]
         score4 = cg if cg is not None else (pct / 25 if pct is not None else None)  # rough % → 4.0
         if q == "bachelors_14":
             flags.append("14-year degree: accepted by some UK unis (often 60%+), others need pre-master's")
@@ -174,7 +175,7 @@ def english_status(lead: Lead) -> str:
 # --------------------------------------------------------------------------- money
 def fees_gbp(lead: Lead) -> int | None:
     """What the student pays to get there: first-year tuition + visa + health surcharge + flights."""
-    lvl = lead.study_level
+    lvl = "ug" if lead.academic_route == "redirect_ug" else lead.study_level   # quote what they can actually do
     if not lvl:
         return None
     ihs = round(C.IHS_PER_YEAR_GBP * (C.VISA_YEARS[lvl] + 0.5))

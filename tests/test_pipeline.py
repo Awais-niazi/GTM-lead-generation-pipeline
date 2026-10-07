@@ -80,7 +80,16 @@ def test_pg_without_degree_redirected():
     l = Lead(phone="03211234567", study_level="pg_taught", highest_qualification="fsc_hssc",
              grade_percent=80, consent=True)
     lead = process(l, today=TODAY, notify=False)
-    assert lead.academic_route == "foundation"
+    assert lead.academic_route == "redirect_ug"
+
+    # Even with money and English sorted, someone who wants an MBA with only FSc is not a Hot call
+    rich = Lead(phone="03211234568", study_level="mba", highest_qualification="fsc_hssc", grade_percent=80,
+                english_test="ielts", english_score=8, budget_pkr_lakh=150, funds_proof="yes",
+                funding_source="self_family", preferred_intake="Jan 2027", has_passport=True, consent=True)
+    lead = process(rich, today=TODAY, notify=False)
+    assert lead.tier != "Hot" and lead.score <= 55 and not lead.call_eligible
+    assert lead.est_fees_gbp == 14000 + 558 + round(776 * 3.5) + 1200          # quoted for a 3-year UG
+    assert "foundation/UG route" in lead.next_action
 
 
 def test_whatsapp_then_quiz_merges():

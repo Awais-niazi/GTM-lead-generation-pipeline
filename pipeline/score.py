@@ -31,7 +31,7 @@ def _budget(lead: Lead) -> int:
 def _academics(lead: Lead) -> int:
     w = C.WEIGHTS["academics"]
     pts = {"direct": w, "check": round(w * .7), "pre_masters": w // 2,
-           "foundation": w // 2}.get(lead.academic_route, round(w * .3))
+           "foundation": w // 2, "redirect_ug": round(w * .15)}.get(lead.academic_route, round(w * .3))
     gap = lead.study_gap_years or 0
     if gap >= 8:
         pts -= 6
@@ -92,6 +92,8 @@ def _next_action(lead: Lead) -> str:
         return "Hold: get consent before any outreach"
     if lead.tier == "Hot":
         return "Call within 1 hour · book counselling · request transcripts + passport copy"
+    if lead.academic_route == "redirect_ug" and lead.tier in ("Warm", "Nurture"):
+        return "Nurture: explain the foundation/UG route and re-quote fees for a 3-year degree"
     if lead.tier == "Warm":
         gaps = []
         if lead.english_status in ("needs_test", "below"):
@@ -132,6 +134,8 @@ def score(lead: Lead) -> Lead:
     if lead.bring_dependants and lead.study_level != "phd":
         total = min(total, 60)
     if lead.budget_status == "short" or lead.funds_proof == "no":
+        total = min(total, 55)
+    if lead.academic_route == "redirect_ug":   # wants a master's/MBA without a bachelor's: never Hot
         total = min(total, 55)
     if lead.previous_uk_refusal:          # needs senior review before anyone promises anything
         total = min(total, 65)

@@ -35,7 +35,8 @@ FUNDING_NAME = {"self_family": "own/family", "loan": "bank loan", "sponsor": "sp
                 "scholarship_only": "scholarship only", "unsure": "not sure"}
 FUNDS_NAME = {"yes": "family can show it", "not_sure": "not sure yet", "no": "can't show it"}
 ROUTE_NAME = {"direct": "direct entry", "check": "depends on university", "foundation": "foundation first",
-              "pre_masters": "pre-master's first", "unknown": "unknown"}
+              "pre_masters": "pre-master's first", "redirect_ug": "needs a bachelor's first (foundation/UG)",
+              "unknown": "unknown"}
 
 
 # --------------------------------------------------------------------------- helpers

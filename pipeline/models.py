@@ -76,7 +76,7 @@ class Lead(BaseModel):
     est_living_funds_pkr_lakh: Optional[float] = None  # shown in the bank for 28 days (UKVI maintenance)
     budget_gap_pkr_lakh: Optional[float] = None
     budget_status: str = ""                  # sufficient / tight / short / unknown
-    academic_route: str = ""                 # direct / foundation / pre_masters / check / unknown
+    academic_route: str = ""                 # direct / check / foundation / pre_masters / redirect_ug / unknown
     english_status: str = ""                 # meets / below / waiver_possible / needs_test / unknown
     recommended_intake: str = ""
     months_to_intake: Optional[int] = None
