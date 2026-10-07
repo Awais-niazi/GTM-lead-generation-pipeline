@@ -15,7 +15,7 @@ Qualification = Literal[
 EnglishTest = Literal["none", "planned", "ielts", "ielts_ukvi", "pte", "toefl", "duolingo", "oxford_elllt"]
 Funding = Literal["self_family", "loan", "sponsor", "scholarship_only", "unsure"]
 Location = Literal["london", "outside", "any"]
-Source = Literal["web_quiz", "whatsapp", "meta_lead_ad", "import"]
+Source = Literal["web_quiz", "whatsapp", "meta_lead_ad", "import", "booking"]
 
 
 def now_iso() -> str:
@@ -87,7 +87,25 @@ class Lead(BaseModel):
     tier: str = ""                           # Hot / Warm / Nurture / Cold / Disqualified
     next_action: str = ""
     assigned_to: str = ""
-    status: str = "New"                      # counselor-owned after creation
+
+    # ---- workflow: quiz → call → qualify → ship → agency → visa ------------
+    stage: str = "New"                       # see config.STAGES
+    stage_history: dict[str, str] = Field(default_factory=dict)   # stage → date first reached
+    call_eligible: bool = False              # quiz result page offers a booking link
+    call_at: str = ""                        # booked call start (from Cal.com)
+    booking_ref: str = ""
+    # you fill these in the working tab during/after the call
+    decision_maker: str = ""                 # Student / Parent / ...
+    handoff_consent: Optional[bool] = None   # agreed to be introduced to the partner consultancy
+    reason: str = ""                         # why Rejected / Not yet / Lost
+    revisit_on: str = ""                     # for Not yet
+    notes: str = ""
+    # shipping + agency feedback
+    shipped_at: str = ""
+    handoff_link: str = ""                   # wa.me link with the intro message, ready for you to send
+    agency_stage: str = ""                   # last value seen in the Delivery tab
+    agency_contacted_on: str = ""
+    agency_notes: str = ""
 
     def compute_id(self) -> str:
         """Stable id from phone (preferred) or email so re-submissions merge."""
@@ -95,17 +113,31 @@ class Lead(BaseModel):
         return hashlib.sha1(key.encode()).hexdigest()[:12] if key else ""
 
 
-# Columns written to Google Sheets, in order.
+# Working tab (yours), in order. Columns you edit are in WORKING_EDITABLE;
+# the pipeline reads them back on sync and before it touches a lead.
 SHEET_COLUMNS = [
-    "lead_id", "tier", "score", "next_action", "status", "assigned_to",
-    "name", "phone_e164", "whatsapp_link", "email", "city_normalized", "province",
+    "lead_id", "stage", "tier", "score", "next_action", "call_at",
+    "name", "phone_e164", "whatsapp_link",
+    "decision_maker", "handoff_consent", "reason", "revisit_on", "notes", "handoff_link",
+    "email", "city_normalized", "province",
     "study_level", "subject", "highest_qualification", "grade_percent", "cgpa", "passing_year",
     "study_gap_years", "academic_route",
     "english_test", "english_score", "english_status",
     "budget_pkr_lakh", "est_first_year_cost_pkr_lakh", "budget_gap_pkr_lakh", "budget_status",
     "funding_source", "preferred_intake", "recommended_intake", "months_to_intake",
     "location_pref", "has_passport", "previous_uk_refusal", "bring_dependants",
-    "graduate_route_months", "flags", "score_breakdown", "completeness",
+    "graduate_route_months", "flags", "score_breakdown", "completeness", "call_eligible",
     "source", "utm_source", "utm_campaign", "consent", "consent_at",
+    "shipped_at", "agency_stage", "stage_history",
     "created_at", "updated_at", "message",
 ]
+WORKING_EDITABLE = ["stage", "decision_maker", "handoff_consent", "reason", "revisit_on", "notes"]
+
+# Delivery tab (shared with the agency). Written once per lead when shipped;
+# the agency owns AGENCY_EDITABLE and the pipeline only reads those back.
+DELIVERY_COLUMNS = [
+    "lead_id", "shipped_at", "agency_stage", "agency_contacted_on", "agency_notes",
+    "name", "phone_e164", "whatsapp_link", "email", "city_normalized",
+    "study_level", "subject", "recommended_intake", "brief",
+]
+AGENCY_EDITABLE = ["agency_stage", "agency_contacted_on", "agency_notes"]

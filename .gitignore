@@ -1,0 +1,9 @@
+# Student personal data and credentials — never commit
+.env
+service_account.json
+*.db
+leads_export.csv
+delivery_export.csv
+__pycache__/
+.venv/
+venv/

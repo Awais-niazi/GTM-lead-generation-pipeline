@@ -1,6 +1,7 @@
-"""SQLite store: dedupe + merge across channels, and an audit trail."""
+"""SQLite store: dedupe + merge across channels, an audit trail, and the delivery log."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from contextlib import closing
@@ -22,6 +23,14 @@ def _conn():
         lead_id TEXT PRIMARY KEY, data TEXT NOT NULL, tier TEXT, updated_at TEXT)""")
     con.execute("""CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT, lead_id TEXT, source TEXT, at TEXT, payload TEXT)""")
+    # Proof of origination: one row per shipped lead, never updated or deleted.
+    con.execute("""CREATE TABLE IF NOT EXISTS deliveries (
+        lead_id TEXT PRIMARY KEY, shipped_at TEXT NOT NULL, brief TEXT NOT NULL,
+        snapshot TEXT NOT NULL, sha256 TEXT NOT NULL)""")
+    con.execute("""CREATE TRIGGER IF NOT EXISTS deliveries_no_update BEFORE UPDATE ON deliveries
+        BEGIN SELECT RAISE(ABORT, 'delivery log is write-once'); END""")
+    con.execute("""CREATE TRIGGER IF NOT EXISTS deliveries_no_delete BEFORE DELETE ON deliveries
+        BEGIN SELECT RAISE(ABORT, 'delivery log is write-once'); END""")
     return con
 
 
@@ -61,3 +70,23 @@ def all_leads() -> list[Lead]:
     with closing(_conn()) as con:
         rows = con.execute("SELECT data FROM leads ORDER BY updated_at DESC").fetchall()
     return [Lead.model_validate_json(r[0]) for r in rows]
+
+
+def log_delivery(lead: Lead, brief: str) -> bool:
+    """Record a shipped lead. Returns False if it was already shipped (never overwritten)."""
+    snapshot = lead.model_dump_json()
+    digest = hashlib.sha256(f"{lead.lead_id}|{lead.shipped_at}|{brief}|{snapshot}".encode()).hexdigest()
+    try:
+        with closing(_conn()) as con, con:
+            con.execute("INSERT INTO deliveries VALUES (?,?,?,?,?)",
+                        (lead.lead_id, lead.shipped_at, brief, snapshot, digest))
+    except sqlite3.IntegrityError:
+        return False
+    return True
+
+
+def deliveries() -> list[dict]:
+    with closing(_conn()) as con:
+        rows = con.execute("SELECT lead_id, shipped_at, brief, sha256 FROM deliveries "
+                           "ORDER BY shipped_at").fetchall()
+    return [dict(zip(("lead_id", "shipped_at", "brief", "sha256"), r)) for r in rows]

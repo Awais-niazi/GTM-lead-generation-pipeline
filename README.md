@@ -1,15 +1,23 @@
 # UK Student Lead Pipeline
 
-Captures students who opt in through three channels, enriches each lead with
-what a UK counselor actually needs (real first-year cost in PKR vs budget,
-academic entry route, English readiness, realistic intake, visa red flags),
-scores it 0–100, and writes it to Google Sheets. Hot leads trigger a WhatsApp
-alert to counselors.
+Finds students who opt in (eligibility quiz, WhatsApp, optionally Meta lead ads),
+works out what a UK application actually needs (real first-year cost in PKR vs budget,
+academic entry route, English readiness, realistic intake, visa red flags), scores
+them 0–100, and walks each one through to a partner consultancy:
 
 ```
-Eligibility quiz ─┐
-WhatsApp chats ───┼─► normalize ─► dedupe/merge ─► enrich ─► score ─► Google Sheet
-Meta lead ads ────┘                (by phone)                        └─► WhatsApp alert (Hot)
+Post (tracked link) ─► Quiz ─► scored lead ─► booking link (only if worth a call)
+                                                  │
+                         Cal.com booking ◄────────┘
+                                │
+                   Qualification call (you) ─► stage = Cooked + handoff consent
+                                │
+                          python run.py sync ─► write-once delivery log
+                                │                + Delivery tab row with a brief
+                                │                + intro message ready to send
+                          Agency updates the Delivery tab ─► Contacted … Visa granted
+                                │
+                          You mark Paid
 ```
 
 A student who WhatsApps you, then fills the quiz, then clicks an ad becomes
@@ -28,7 +36,8 @@ A student who WhatsApps you, then fills the quiz, then clicks an ad becomes
 | `study_gap_years` | flags gaps of 5+ years that need a written explanation |
 | `flags` | dependants on a taught course (not allowed), prior UK refusal, scholarship-only funding, disposable email, no passport… |
 | `score`, `tier`, `score_breakdown` | budget 30 · academics 20 · English 15 · timeline 15 · intent 10 · contactability 10 |
-| `next_action`, `assigned_to` | what the counselor should do, routed by province (refusals → senior counselor) |
+| `next_action` | what to do next, based on the stage (and on the score while the lead is New) |
+| `call_eligible` | whether the quiz result offers a booking link (see `CALL_FILTER` in `config.py`) |
 
 Tiers: **Hot** ≥70 (call within an hour), **Warm** ≥50, **Nurture** ≥30, **Cold**.
 Hard caps: budget short → max 55; dependants on a taught course → max 60; prior refusal → max 65.
@@ -42,7 +51,7 @@ All tunables (visa figures, tuition floors, weights, thresholds, PKR rate) are i
 ```bash
 pip install -r requirements.txt
 cp .env.example .env        # fill in, then export (or use your host's env settings)
-python -m pytest -q tests    # 12 tests
+python -m pytest -q tests    # 20 tests
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 Host anywhere with HTTPS: Railway, Render, a small VPS. Meta webhooks require HTTPS.
@@ -54,17 +63,58 @@ Without Google credentials the pipeline writes `leads_export.csv` instead, so yo
 3. Create a sheet, share it (Editor) with the service account's email.
 4. Put the sheet ID from its URL into `GOOGLE_SHEET_ID`.
 
-The header row is created automatically. Counselors own the `status` and `assigned_to`
-columns; the pipeline never overwrites them once filled. Add a filter view on
-`tier = Hot` for the morning call list.
+Two tabs are created automatically, with headers and dropdowns:
+
+- **Leads** (yours): every lead. You edit `stage`, `decision_maker`, `handoff_consent`,
+  `reason`, `revisit_on` (dd/mm/yyyy or yyyy-mm-dd) and `notes`. Everything else is
+  written by the pipeline.
+- **Delivery** (share this tab with the agency, or copy it to a sheet they can edit):
+  one row per shipped lead, with a brief. The agency fills in `agency_stage`,
+  `agency_contacted_on` and `agency_notes`; the pipeline only reads those.
+
+Values are written as plain text, so nothing a student types can run as a formula.
+If you're upgrading an older sheet, start with a fresh tab: the columns have changed.
 
 ### 3. Landing page (eligibility quiz)
 `landing/uk-eligibility.html`: set `PIPELINE_URL` to `https://your-host/webhook/quiz`,
-`QUIZ_KEY` to match `QUIZ_SHARED_KEY`, and your agency name. Host it on your website.
+`QUIZ_KEY` to match `QUIZ_SHARED_KEY`, and `BRAND` to match `BRAND_NAME`. Host it on your website.
+Give each post its own link (`?utm_source=tiktok&utm_campaign=cost-pkr-oct12`) so you can see
+which posts produce leads that ship. Students who pass `CALL_FILTER` see a "Book a free
+10-minute WhatsApp call" button; everyone else sees their plan and goes to nurture.
 UTM tags (`?utm_source=fb&utm_campaign=jan27`) are captured automatically.
 Students see their result instantly; that instant answer is why they give you a real number.
 
-### 4. Meta lead ads (Facebook + Instagram Instant Forms)
+### 4. Cal.com (qualification call)
+1. Create a 10-minute event, set its location to WhatsApp / phone, and require a phone number.
+   Put the event link in `BOOKING_URL`.
+2. Settings → Developer → Webhooks: URL `https://your-host/webhook/booking`, triggers
+   *Booking created*, *Booking rescheduled* and *Booking cancelled*, and a secret → `CALCOM_WEBHOOK_SECRET`.
+3. Turn on Cal.com's reminder workflow (day before + 1 hour before); no-shows are common.
+
+The booking link carries the lead id, so a booking moves that lead to **Call booked**
+and WhatsApps you (`ALERT_WHATSAPP`).
+
+### 5. Daily routine
+
+| Stage | What happens |
+|---|---|
+| New | Quiz done. Eligible leads were offered a call. |
+| Call booked | Set by Cal.com. Do the call: who pays + 28-day funds, passport, refusals, firm intake, decision maker, consent to be introduced. |
+| No-show / Not yet / Rejected | You set these. Fill `reason`; `Not yet` takes a `revisit_on` date. |
+| Cooked | You set this, plus `handoff_consent = Yes`. The next sync ships it. |
+| Shipped | Written to the delivery log and the Delivery tab. Click `handoff_link` to send the student the intro from your phone. |
+| Contacted … Visa granted / Enrolled / Lost | From the agency's Delivery tab. |
+| Paid | You set this when the money arrives. |
+| Opted out | Set automatically when a student replies STOP. |
+
+```bash
+python run.py sync         # every 10–15 min (cron): reads both tabs, ships Cooked leads
+python run.py todo         # calls to log, revisits due, agency not contacting, money due
+python run.py deliveries   # every shipped lead with timestamp + hash: your proof for invoicing
+```
+The delivery log is a SQLite table that refuses updates and deletes. Keep backups of `leads.db`.
+
+### 6. Meta lead ads (optional; Facebook + Instagram Instant Forms)
 1. Create a Meta app (Business type), add the **Webhooks** product.
 2. Subscribe the **Page** object to `leadgen`. Callback: `https://your-host/webhook/meta`, verify token = `META_VERIFY_TOKEN`.
 3. Generate a long-lived **Page access token** with `leads_retrieval`, `pages_manage_metadata`, `pages_show_list` → `META_PAGE_ACCESS_TOKEN`. Set `META_APP_SECRET` so payload signatures are checked.
@@ -84,7 +134,7 @@ Students see their result instantly; that instant answer is why they give you a 
 Use **Higher intent** form type, and add a custom consent disclaimer that names WhatsApp contact.
 Include the budget question; it is the single best filter for serious students.
 
-### 5. WhatsApp (Cloud API)
+### 7. WhatsApp (Cloud API)
 1. In the same Meta app add **WhatsApp**, register your business number.
 2. Subscribe the WhatsApp Business Account webhook to `messages` (same callback URL).
 3. Set `WHATSAPP_TOKEN` (system user permanent token) and `WHATSAPP_PHONE_NUMBER_ID`.
@@ -93,26 +143,27 @@ When a new student messages you, the pipeline pulls whatever it can from the tex
 ("MS in UK sept 2027, ielts 6.5, budget 1.2 crore, Lahore" fills five fields), and if
 the lead is under 60% complete it replies with the quiz link prefilled with their number.
 
-Counselor alerts: free-form messages only deliver inside a 24-hour window. For reliable
-alerts, register a utility template (e.g. `new_hot_lead`) and switch `alert_counselors`
-in `pipeline/sinks.py` to send it.
+Alerts to you and the agency are free-form messages, which only deliver inside a 24-hour
+window. For reliable alerts, register utility templates and switch `notify` in
+`pipeline/sinks.py` to send them. Replying STOP opts a student out.
 
-### 6. Daily rescore
+### 8. Daily rescore
 Intakes get closer every day, so scores change. Run once a day (cron / host scheduler):
 ```bash
-python run.py rescore      # re-enrich + re-score; alerts on leads that just turned Hot
+python run.py rescore      # sync, re-enrich + re-score, alert on new Hot leads, print the to-do list
 ```
 Old lists from expos or past inquiries: `python run.py import file.csv` (column names =
 Lead fields; see `samples/sample_leads.csv`).
 
 ## Compliance
 
-Every lead here has opted in: quiz consent checkbox, Meta form disclaimer, or the student
-messaging you first. Keep it that way. Don't load scraped Facebook-group numbers, purchased
+Every lead here has opted in: quiz consent checkbox (which also covers sharing details with
+the partner consultancy), Meta form disclaimer, or the student messaging you first. Nothing
+ships without `handoff_consent = Yes` from the call. Keep it that way. Don't load scraped Facebook-group numbers, purchased
 lists or "student databases"; they burn your WhatsApp number's quality rating, breach Meta
 terms, and conflict with Pakistan's PECA and personal-data rules. Leads without consent are
-held with "Hold: get consent" and never alerted. Honour STOP replies by setting status to
-"Opted out".
+held with "Hold: get consent" and never alerted. STOP replies set the stage to "Opted out"
+automatically.
 
 ## Keep current
 UK figures (checked Oct 2026): visa £558, IHS £776/yr, maintenance £1,171/£1,529 per month

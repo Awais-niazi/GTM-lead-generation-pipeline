@@ -4,6 +4,7 @@ Endpoints
   POST /webhook/quiz        landing-page submissions
   GET  /webhook/meta        Meta verification handshake (lead ads + WhatsApp)
   POST /webhook/meta        Meta events: 'leadgen' (lead ads) and WhatsApp messages
+  POST /webhook/booking     Cal.com booking created / rescheduled / cancelled
   GET  /leads/summary       quick counts by tier/source
   GET  /health
 """
@@ -15,16 +16,17 @@ import logging
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 
 from pipeline import config as C
-from pipeline import sinks, sources, store
+from pipeline import sinks, sources, store, workflow
 from pipeline.process import process
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("uk-leads")
 
-app = FastAPI(title=f"{C.AGENCY_NAME} UK lead pipeline")
+app = FastAPI(title=f"{C.BRAND_NAME} UK lead pipeline")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["POST"], allow_headers=["*"])
 
 
@@ -43,12 +45,13 @@ async def quiz(request: Request, x_quiz_key: str | None = Header(default=None)):
         return {"ok": True}
     if not payload.get("consent"):
         raise HTTPException(400, "consent required")
-    lead = process(sources.from_web_quiz(payload), payload)
+    lead = await run_in_threadpool(process, sources.from_web_quiz(payload), payload)
     # Return only what the student should see (no internal score).
+    url = workflow.booking_url(lead) if lead.call_eligible else ""
     return {"ok": True, "recommended_intake": lead.recommended_intake,
             "est_cost_pkr_lakh": lead.est_first_year_cost_pkr_lakh,
             "budget_status": lead.budget_status, "english_status": lead.english_status,
-            "academic_route": lead.academic_route}
+            "academic_route": lead.academic_route, "book_call": bool(url), "booking_url": url}
 
 
 # --------------------------------------------------------------------------- Meta (lead ads + WhatsApp)
@@ -60,13 +63,13 @@ def meta_verify(request: Request):
     raise HTTPException(403, "verification failed")
 
 
-def _valid_signature(body: bytes, header: str | None) -> bool:
-    if not C.META_APP_SECRET:
+def _valid_signature(body: bytes, header: str | None, secret: str, prefix: str = "sha256=") -> bool:
+    if not secret:
         return True                            # dev mode
-    if not header or not header.startswith("sha256="):
+    if not header or not header.startswith(prefix):
         return False
-    expected = hmac.new(C.META_APP_SECRET.encode(), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, header[7:])
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, header[len(prefix):])
 
 
 def _handle_meta(payload: dict) -> None:
@@ -79,6 +82,9 @@ def _handle_meta(payload: dict) -> None:
                 log.exception("failed to fetch Meta lead %s", lid)
     elif obj == "whatsapp_business_account":
         for lead in sources.from_whatsapp(payload):
+            if workflow.is_stop(lead.message):
+                workflow.opt_out(lead.phone)
+                continue
             is_new = store.get(_id_for(lead)) is None
             processed = process(lead, payload)
             if is_new and processed.completeness < 60:
@@ -95,10 +101,20 @@ def _id_for(lead):
 async def meta_events(request: Request, bg: BackgroundTasks,
                       x_hub_signature_256: str | None = Header(default=None)):
     body = await request.body()
-    if not _valid_signature(body, x_hub_signature_256):
+    if not _valid_signature(body, x_hub_signature_256, C.META_APP_SECRET):
         raise HTTPException(401, "bad signature")
     bg.add_task(_handle_meta, await request.json())   # ack fast; Meta retries slow endpoints
     return {"ok": True}
+
+
+# --------------------------------------------------------------------------- Cal.com bookings
+@app.post("/webhook/booking")
+async def booking(request: Request, x_cal_signature_256: str | None = Header(default=None)):
+    body = await request.body()
+    if not _valid_signature(body, x_cal_signature_256, C.CALCOM_WEBHOOK_SECRET, prefix=""):
+        raise HTTPException(401, "bad signature")
+    lead = await run_in_threadpool(workflow.handle_booking, await request.json())
+    return {"ok": True, "matched": bool(lead)}
 
 
 # --------------------------------------------------------------------------- reporting
@@ -107,4 +123,4 @@ def summary():
     leads = store.all_leads()
     by = lambda attr: {k: sum(1 for l in leads if getattr(l, attr) == k)
                        for k in sorted({getattr(l, attr) for l in leads})}
-    return {"total": len(leads), "by_tier": by("tier"), "by_source": by("source")}
+    return {"total": len(leads), "by_tier": by("tier"), "by_source": by("source"), "by_stage": by("stage")}

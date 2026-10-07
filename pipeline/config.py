@@ -15,13 +15,19 @@ from datetime import date
 # ---------------------------------------------------------------------------
 # Agency / integration settings (from environment)
 # ---------------------------------------------------------------------------
-AGENCY_NAME = os.getenv("AGENCY_NAME", "Your Consultancy")
+BRAND_NAME = os.getenv("BRAND_NAME", "Your Brand")                  # what students see
+PARTNER_NAME = os.getenv("PARTNER_NAME", "our partner consultancy")  # the agency leads are shipped to
 QUIZ_URL = os.getenv("QUIZ_URL", "https://example.com/uk-eligibility")
+
+# Cal.com event link for the qualification call, and its webhook signing secret
+BOOKING_URL = os.getenv("BOOKING_URL", "")
+CALCOM_WEBHOOK_SECRET = os.getenv("CALCOM_WEBHOOK_SECRET", "")
 
 # Google Sheets
 GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
-SHEET_TAB = os.getenv("SHEET_TAB", "Leads")
+SHEET_TAB = os.getenv("SHEET_TAB", "Leads")                # your working tab
+DELIVERY_TAB = os.getenv("DELIVERY_TAB", "Delivery")       # shipped leads, shared with the agency
 
 # Meta (Facebook / Instagram lead ads + WhatsApp Cloud API share one app)
 META_VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN", "change-me")
@@ -31,14 +37,21 @@ META_GRAPH_VERSION = os.getenv("META_GRAPH_VERSION", "v21.0")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
 
-# Counselor alerts for Hot leads (comma-separated WhatsApp numbers in +92 format)
-COUNSELOR_WHATSAPP = [n.strip() for n in os.getenv("COUNSELOR_WHATSAPP", "").split(",") if n.strip()]
+# Who gets Hot-lead and call-booked alerts (you), and who is told about shipped leads (the agency).
+# Comma-separated WhatsApp numbers in +92 format.
+def _numbers(var: str) -> list[str]:
+    return [n.strip() for n in os.getenv(var, "").split(",") if n.strip()]
+
+
+ALERT_WHATSAPP = _numbers("ALERT_WHATSAPP")
+AGENCY_WHATSAPP = _numbers("AGENCY_WHATSAPP")
 
 # Shared secret the landing page sends so randoms can't spam the quiz webhook
 QUIZ_SHARED_KEY = os.getenv("QUIZ_SHARED_KEY", "")
 
 DB_PATH = os.getenv("DB_PATH", "leads.db")
 CSV_FALLBACK = os.getenv("CSV_FALLBACK", "leads_export.csv")
+DELIVERY_CSV = os.getenv("DELIVERY_CSV", "delivery_export.csv")
 
 # ---------------------------------------------------------------------------
 # Money
@@ -106,6 +119,27 @@ WEIGHTS = {
     "contactability": 10,
 }
 TIER_THRESHOLDS = {"Hot": 70, "Warm": 50, "Nurture": 30}  # below Nurture → Cold
+
+# Who gets offered a qualification call on the quiz result page. Your time is the cost.
+CALL_FILTER = {
+    "budget_status": {"sufficient", "tight"},
+    "academic_route": {"direct", "check", "foundation", "pre_masters"},
+    "max_months_to_intake": 12,
+}
+
+# ---------------------------------------------------------------------------
+# Lead stages (dropdown in the working tab). The agency moves leads through
+# AGENCY_STAGES in the Delivery tab; you mark Paid when the PKR 100k arrives.
+# ---------------------------------------------------------------------------
+STAGES = [
+    "New", "Call booked", "No-show", "Not yet", "Rejected", "Cooked", "Shipped",
+    "Contacted", "Counselling", "Applied", "Offer", "CAS", "Visa granted", "Enrolled",
+    "Paid", "Lost", "Opted out",
+]
+AGENCY_STAGES = ["Contacted", "Counselling", "Applied", "Offer", "CAS", "Visa granted", "Enrolled", "Lost"]
+DECISION_MAKERS = ["Student", "Parent", "Sibling", "Spouse", "Other"]
+SHIP_CONTACT_SLA_DAYS = 2      # agency should have contacted a shipped lead by then
+STALE_DAYS = 30                # shipped lead with no agency update for this long → chase
 
 # Pakistani city tiers — used for routing (branch office) and ad targeting
 CITY_TIER = {

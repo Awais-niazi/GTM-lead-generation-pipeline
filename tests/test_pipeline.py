@@ -1,6 +1,5 @@
 from datetime import date
 
-import pytest
 from fastapi.testclient import TestClient
 
 from pipeline import config as C
@@ -12,19 +11,12 @@ from pipeline.process import process
 TODAY = date(2026, 10, 7)
 
 
-@pytest.fixture(autouse=True)
-def tmp_store(tmp_path, monkeypatch):
-    monkeypatch.setattr(C, "DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setattr(C, "CSV_FALLBACK", str(tmp_path / "t.csv"))
-    monkeypatch.setattr(C, "GOOGLE_SHEET_ID", "")
-    monkeypatch.setattr(C, "META_APP_SECRET", "")
-
-
 def test_phone_normalization():
     assert normalize_phone("0300-1234567") == "+923001234567"
     assert normalize_phone("92 300 1234567") == "+923001234567"
     assert normalize_phone("3001234567") == "+923001234567"
     assert normalize_phone("+44 7700 900123") == "+447700900123"
+    assert normalize_phone("+92 0300 1234567") == "+923001234567"
     assert normalize_phone("12345") == ""
 
 

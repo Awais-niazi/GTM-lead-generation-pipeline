@@ -125,13 +125,17 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .verdict b { display: block; }
 .verdict span { color: var(--muted); font-size: 14.5px; }
 .result ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.cta { display: grid; gap: 8px; padding: 16px; margin-bottom: 20px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft); }
+.cta b { font: 700 18px/1.2 var(--f-display); font-stretch: 92%; }
+.cta span { color: var(--muted); font-size: 14.5px; }
+.cta a { justify-self: start; font: 600 16px/1 var(--f-body); border-radius: 8px; padding: 13px 20px; background: var(--accent); color: var(--accent-ink); text-decoration: none; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
 <div class="wrap">
   <header class="top">
-    <div class="brand" id="agency">Your Consultancy</div>
+    <div class="brand" id="brand">Your Brand</div>
     <small>UK intakes: Jan · May · Sep</small>
   </header>
 
@@ -267,7 +271,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
         <datalist id="cities"><option>Lahore</option><option>Karachi</option><option>Islamabad</option><option>Rawalpindi</option><option>Faisalabad</option><option>Multan</option><option>Peshawar</option><option>Gujranwala</option><option>Sialkot</option><option>Quetta</option><option>Hyderabad</option></datalist>
         <label class="f">Email <span class="hint">Optional</span><input type="email" name="email" id="email" autocomplete="email"></label>
         <input class="hp" type="text" name="website" id="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-        <label class="check"><input type="checkbox" name="consent" id="consent"> <span id="consent-text">I agree that a counselor may contact me on WhatsApp, phone and email about studying in the UK. I can opt out anytime by replying STOP.</span></label>
+        <label class="check"><input type="checkbox" name="consent" id="consent"> <span id="consent-text">I agree that <span class="brand-name">Your Brand</span> may contact me on WhatsApp, phone and email about studying in the UK, and may share my details with a partner UK study consultancy to help with my application. I can opt out anytime by replying STOP.</span></label>
       </fieldset>
 
       <!-- result -->
@@ -304,14 +308,16 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 </div>
 
 <script>
-/* ===== Settings — edit these two lines when you host the page ===== */
-const PIPELINE_URL = "";          // e.g. "https://leads.youragency.pk/webhook/quiz"
+/* ===== Settings — edit these lines when you host the page ===== */
+const PIPELINE_URL = "";          // e.g. "https://api.yourbrand.pk/webhook/quiz"
 const QUIZ_KEY = "";              // must match QUIZ_SHARED_KEY on the server
-const AGENCY = "Your Consultancy";
+const BRAND = "Your Brand";       // must match BRAND_NAME on the server
 const GBP_TO_PKR = 375;
 /* ================================================================== */
 
-document.getElementById("agency").textContent = AGENCY;
+document.getElementById("brand").textContent = BRAND;
+document.querySelectorAll(".brand-name").forEach(e => e.textContent = BRAND);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const TUITION = { foundation: 9000, ug: 14000, pg_taught: 15000, mba: 18000, phd: 17000 };
 const YEARS = { foundation: 1, ug: 3, pg_taught: 1, mba: 1, phd: 3 };
 const IELTS = { foundation: 4.5, ug: 6.0, pg_taught: 6.5, mba: 6.5, phd: 6.5 };
@@ -457,7 +463,7 @@ function validate(i) {
     if (!d.name) return "Enter your name.";
     if (!/^(\+?92|0)?3\d{9}$/.test(d.phone.replace(/[\s-]/g, "")) && !/^\+\d{8,15}$/.test(d.phone.replace(/[\s-]/g, "")))
       return "Enter a WhatsApp number like 0300 1234567.";
-    if (!d.consent) return "Tick the box so a counselor can send you your plan.";
+    if (!d.consent) return "Tick the box so we can send you your plan.";
   }
   return "";
 }
@@ -465,19 +471,20 @@ function validate(i) {
 async function submit() {
   const d = data(), r = evaluate(d);
   $("next").disabled = true;
-  let sent = false;
+  let sent = false, server = {};
   if (PIPELINE_URL && !d.website) {
     try {
       const res = await fetch(PIPELINE_URL, { method: "POST",
         headers: { "Content-Type": "application/json", ...(QUIZ_KEY ? { "X-Quiz-Key": QUIZ_KEY } : {}) },
         body: JSON.stringify(d) });
       sent = res.ok;
+      if (res.ok) server = await res.json();
     } catch (e) { sent = false; }
   }
-  renderResult(d, r, sent);
+  renderResult(d, r, sent, server);
 }
 
-function renderResult(d, r, sent) {
+function renderResult(d, r, sent, server = {}) {
   steps.forEach(s => s.hidden = true);
   $("nav").hidden = true; $("progress").hidden = true;
   const first = d.name.split(" ")[0];
@@ -487,7 +494,7 @@ function renderResult(d, r, sent) {
     `Estimated year one: about ${r.lakh} lakh PKR (£${r.gbp.toLocaleString("en-GB")}). ` +
     (gap >= 0 ? `You have about ${gap} lakh spare.` : `You're about ${Math.abs(gap)} lakh short — lower-fee universities, scholarships or instalment plans can close this.`)]);
   v.push([tone[r.route] || "warn", ROUTE_NAME[r.route],
-    { direct: "Your grades fit direct entry at many UK universities.", check: "Some universities will take you directly; a counselor will shortlist them.",
+    { direct: "Your grades fit direct entry at many UK universities.", check: "Some universities will take you directly; we can help you shortlist them.",
       foundation: "You'd start with a foundation year, then move into the degree.", pre_masters: "A short pre-master's course gets you into the master's.", unknown: "We'll check your transcripts." }[r.route]]);
   v.push([tone[r.eng] || "warn", "English: " + ENG_NAME[r.eng],
     { meets: "Your score meets the usual requirement.", below: `Most ${LEVEL_NAME[d.study_level]} courses ask for about IELTS ${IELTS[d.study_level]}.`,
@@ -503,8 +510,15 @@ function renderResult(d, r, sent) {
   steps2.push("Keep your transcripts and degree certificates ready (HEC attestation for degrees).");
   steps2.push("Funds must sit in the bank for 28 days before your visa application.");
 
-  $("result").innerHTML = `<h2>${first ? first + ", here's" : "Here's"} your UK plan</h2>
-    <p>${sent ? "We've sent this to our counselors. Expect a WhatsApp message within one working day." : "A counselor can turn this into a university shortlist for you."}</p>
+  const book = server.book_call && /^https:\/\//.test(server.booking_url || "");
+  const intro = !sent ? "Save this page — it's your starting point."
+    : book ? "Your answers look promising. The next step is a quick call to check the details."
+    : "We'll WhatsApp you intake reminders, cost updates and IELTS tips so you're ready when the time is right.";
+  const cta = book ? `<div class="cta"><b>Book a free 10-minute WhatsApp call</b>
+      <span>We'll go through your budget, documents and timeline, and tell you honestly if you're ready to apply.</span>
+      <a href="${esc(server.booking_url)}" target="_blank" rel="noopener">Pick a time</a></div>` : "";
+  $("result").innerHTML = `<h2>${first ? esc(first) + ", here's" : "Here's"} your UK plan</h2>
+    <p>${intro}</p>${cta}
     <div class="verdicts">${v.map(([t, h, s]) => `<div class="verdict"><i class="${t}"></i><div><b>${h}</b><span>${s}</span></div></div>`).join("")}</div>
     <div class="step-label">Next steps</div><ol>${steps2.map(s => `<li>${s}</li>`).join("")}</ol>`;
   $("result").hidden = false;

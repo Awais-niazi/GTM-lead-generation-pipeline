@@ -33,6 +33,8 @@ def normalize_phone(raw: str) -> str:
     d = re.sub(r"\D", "", s)
     if d.startswith("00"):
         d = d[2:]
+    if d.startswith("9203") and len(d) == 13:   # "+92 0300 …": country code plus trunk 0
+        d = "92" + d[3:]
     if len(d) == 11 and d.startswith("03"):
         return "+92" + d[1:]
     if len(d) == 10 and d.startswith("3"):
